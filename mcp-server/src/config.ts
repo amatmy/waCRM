@@ -15,6 +15,8 @@ export interface Config {
   apiKey: string;
   enableWrites: boolean;
   enableBroadcasts: boolean;
+  copilotMode: boolean;
+  operatorId?: string;
 }
 
 function truthy(value: string | undefined): boolean {
@@ -34,7 +36,7 @@ export function loadConfig(): Config {
     throw new Error(
       `Missing required environment variable(s): ${missing.join(', ')}. ` +
         `Set WACRM_BASE_URL to your instance URL (e.g. https://crm.example.com) ` +
-        `and WACRM_API_KEY to a key from Settings → API keys.`,
+        `and WACRM_API_KEY to a key from Settings → API keys.`
     );
   }
 
@@ -42,16 +44,33 @@ export function loadConfig(): Config {
   const baseUrl = baseUrlRaw!.replace(/\/+$/, '');
   if (!/^https?:\/\//.test(baseUrl)) {
     throw new Error(
-      `WACRM_BASE_URL must start with http:// or https:// (got "${baseUrl}").`,
+      `WACRM_BASE_URL must start with http:// or https:// (got "${baseUrl}").`
     );
   }
 
   const enableWrites = truthy(process.env.WACRM_ENABLE_WRITES);
   const enableBroadcasts = truthy(process.env.WACRM_ENABLE_BROADCASTS);
+  const copilotMode = truthy(process.env.WACRM_COPILOT_MODE);
+  const operatorId = process.env.WACRM_OPERATOR_ID?.trim();
+
+  if (
+    copilotMode &&
+    (!operatorId ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        operatorId
+      ))
+  ) {
+    throw new Error('Copilot mode requires WACRM_OPERATOR_ID to be a UUID.');
+  }
+  if (copilotMode && (enableWrites || enableBroadcasts)) {
+    throw new Error(
+      'Copilot writes are unavailable until guarded replies and handoff are implemented. Use a read-only API key.'
+    );
+  }
 
   if (enableBroadcasts && !enableWrites) {
     throw new Error(
-      'WACRM_ENABLE_BROADCASTS requires WACRM_ENABLE_WRITES to also be set.',
+      'WACRM_ENABLE_BROADCASTS requires WACRM_ENABLE_WRITES to also be set.'
     );
   }
 
@@ -60,5 +79,7 @@ export function loadConfig(): Config {
     apiKey: apiKey!,
     enableWrites,
     enableBroadcasts,
+    copilotMode,
+    operatorId,
   };
 }
