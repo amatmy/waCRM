@@ -116,6 +116,10 @@ export class WacrmClient {
     return this.request('GET', '/me');
   }
 
+  getCopilotSession(operatorId: string): Promise<{ data: unknown }> {
+    return this.request('GET', '/copilot/session', { query: { operator_id: operatorId } });
+  }
+
   // --- Messages -----------------------------------------------------
 
   sendMessage(body: unknown): Promise<{ data: unknown }> {

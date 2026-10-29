@@ -14,6 +14,8 @@ const tablesWithoutDomainData = new Set([
   "account_invitations",
   "member_presence",
   "pending_message_statuses",
+  // Presence leases contain no customer data and must not prevent joining a team.
+  "copilot_sessions",
 ]);
 
 function accountScopedTables(): Set<string> {

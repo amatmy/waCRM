@@ -1,4 +1,21 @@
-# wacrm — CRM Template for WhatsApp
+# waCRM — Human-session WhatsApp copilot fork
+
+This fork of [ArnasDon/wacrm](https://github.com/ArnasDon/wacrm) is building an AI
+copilot that assists during the human operator's active session, with hybrid
+replies and explicit human handoff. No scheduled AI shifts, 24/7 requirement,
+or paid AI inference API is part of the copilot design.
+
+**Work is in progress.** The first implementation adds human session leases
+and a read-only profile to the existing MCP server. Autonomous replies and
+handoff enforcement are future milestones. The upstream AI settings described
+below use provider APIs; leave them unconfigured for this copilot workflow.
+
+[Roadmap and acceptance gates](https://github.com/amatmy/waCRM/issues/9) ·
+[Architecture and local setup](docs/copilot.md) ·
+[Upstream audit](docs/copilot-upstream-audit.md)
+
+## Upstream project
+
 
 > Self-hostable CRM template for WhatsApp® — shared inbox, contacts,
 > sales pipelines, broadcasts, and no-code automations. Fork it, brand
