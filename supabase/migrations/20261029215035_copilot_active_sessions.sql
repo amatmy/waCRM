@@ -13,6 +13,9 @@ CREATE TABLE public.copilot_sessions (
 ALTER TABLE public.copilot_sessions ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.copilot_sessions FROM PUBLIC, anon, authenticated, service_role;
 GRANT SELECT ON public.copilot_sessions TO authenticated, service_role;
+-- Session status also reads membership. New Supabase projects may not
+-- grant table access automatically; existing profile RLS still applies.
+GRANT SELECT ON public.profiles TO authenticated, service_role;
 CREATE POLICY copilot_sessions_read ON public.copilot_sessions
   FOR SELECT TO authenticated
   USING (operator_id = (SELECT auth.uid()) AND public.is_account_member(account_id, 'agent'));

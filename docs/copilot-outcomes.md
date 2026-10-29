@@ -28,12 +28,19 @@ Issues remain open until the corresponding implementation is accepted/merged.
 | New migration + SQL behavior | Passed on isolated local PostgreSQL 17 with minimal synthetic account/auth schema and upstream membership/bootstrap helpers                                                                                                                                             |
 | SQL behaviors exercised      | start/heartbeat/pause, expired/paused rejection, restart generation, stale pause, direct-mutation denial, different-account and same-account operator isolation, account move, role downgrade, service-role activation denial, anonymous access, missing human identity |
 | Security advisors            | CLI reported no issues on that isolated minimal database; not an audit of a real Supabase instance                                                                                                                                                                      |
-| Full Supabase replay         | Local image download stalled before database startup; full replay is required in the Migrations CI workflow                                                                                                                                                             |
+| Full Supabase replay         | Full history replay and schema verification passed in GitHub CI; final session checks run in the same workflow (see the PR for current results)                                                                                                                         |
 
 The full application test suite initially caught that the new ephemeral lease
 table was absent from the account-joining test's non-domain-data list. It is now
 classified with existing presence tables; a presence lease should not prevent
 a user joining a team. The rerun passed.
+
+The first GitHub database run also exposed a CLI harness constraint (one
+prepared statement per query), and full-schema testing exposed a missing
+explicit SELECT grant on the profile membership dependency. The SQL test now
+uses one self-rolling-back statement, and the migration explicitly grants that
+read to authenticated/service roles under existing profile RLS. Local tests
+with the minimal schema alone did not reveal the inherited grant difference.
 
 ## Still required
 
