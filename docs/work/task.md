@@ -5,8 +5,7 @@
 Repository: `amatmy/waCRM`. Read `AGENTS.md`, roadmap
 https://github.com/amatmy/waCRM/issues/9, Issue #5
 https://github.com/amatmy/waCRM/issues/5, and their current comments before work.
-This brief is a handoff, **not authorization to begin #5**. The Issue #4 run
-stops after review, implementation, testing, PR publication and GitHub reporting.
+**User authorization:** Proceed with Issue #5 in the next manually initiated Work run. Scope is strictly Issue #5; the previous Issue #4 run is complete. Do not merge or deploy without separate approval.
 GitHub Issues/PRs own decisions, delivery status and blockers.
 
 ## Dependencies to verify before coding
