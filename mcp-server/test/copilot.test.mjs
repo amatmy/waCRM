@@ -338,13 +338,11 @@ test('durable work tools preserve capabilities, call controlled REST and cannot 
     calls.push({ path: req.url, body: JSON.parse(body) });
     res.setHeader('Content-Type', 'application/json');
     if (denied)
-      res
-        .writeHead(403)
-        .end(
-          JSON.stringify({
-            error: { code: 'forbidden', message: 'Missing copilot:work' },
-          })
-        );
+      res.writeHead(403).end(
+        JSON.stringify({
+          error: { code: 'forbidden', message: 'Missing copilot:work' },
+        })
+      );
     else
       res.end(
         JSON.stringify({
@@ -373,6 +371,7 @@ test('durable work tools preserve capabilities, call controlled REST and cannot 
     'reconcile_inbound_work',
     'claim_next_inbound_work',
     'get_inbound_work',
+    'get_verified_reply_context',
     'renew_inbound_work',
     'release_inbound_work',
     'settle_inbound_work',
@@ -390,6 +389,7 @@ test('durable work tools preserve capabilities, call controlled REST and cannot 
     ['reconcile_inbound_work', {}],
     ['claim_next_inbound_work', { session_id: operator }],
     ['get_inbound_work', { work_id: operator }],
+    ['get_verified_reply_context', { work_id: operator, work_token: operator }],
     ['renew_inbound_work', { work_id: operator, work_token: operator }],
     ['release_inbound_work', { work_id: operator, work_token: operator }],
     ['settle_inbound_work', { work_id: operator, work_token: operator }],
@@ -397,7 +397,7 @@ test('durable work tools preserve capabilities, call controlled REST and cannot 
     assert.ok(!(await client.callTool({ name, arguments: args })).isError);
   assert.deepEqual(
     calls.map((x) => x.body.action),
-    ['reconcile', 'claim', 'inspect', 'renew', 'release', 'settle']
+    ['reconcile', 'claim', 'inspect', 'knowledge', 'renew', 'release', 'settle']
   );
   assert.ok(calls.every((x) => x.path === '/api/v1/copilot/work'));
   await client.callTool({

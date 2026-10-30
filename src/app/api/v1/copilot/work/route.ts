@@ -26,6 +26,13 @@ export async function POST(request: Request) {
       case 'inspect':
         data = await service.inspect(actor, uuid(body, 'work_id'));
         break;
+      case 'knowledge':
+        data = await service.knowledge(
+          actor,
+          uuid(body, 'work_id'),
+          uuid(body, 'work_token')
+        );
+        break;
       case 'renew':
         data = await service.renew(
           actor,

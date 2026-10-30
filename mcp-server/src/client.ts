@@ -66,6 +66,8 @@ export class WacrmClient {
       res = await fetch(url, {
         method,
         headers,
+        redirect: 'error',
+        signal: AbortSignal.timeout(10000),
         body:
           options.body !== undefined ? JSON.stringify(options.body) : undefined,
       });

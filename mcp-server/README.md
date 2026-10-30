@@ -112,3 +112,13 @@ Logs go to **stderr** — stdout is reserved for the MCP protocol.
 ## License
 
 MIT — same as wacrm.
+
+## Callable local inference host (fork)
+
+The fork includes `runtime/cli.mjs --once`, sharing the bounded work-cycle protocol
+with the application. See [local runtime](../docs/copilot-runtime.md) for the pinned
+local model, scoped credentials, human-session prerequisites, safety contract and
+synthetic evidence. Build MCP first; `npm run runtime:once` does not start a human
+session or a model service. `get_verified_reply_context` reads current exact
+human-verified knowledge under the claimed work capability. No paid API fallback,
+raw message or broadcast tool is exposed by the host.

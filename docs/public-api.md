@@ -429,3 +429,14 @@ reply/CRM/context operations require the returned `work_token`. Human queue
 resolution is available only through the human control API and never resends
 or reconciles an ambiguous outbox attempt. No resident/local-model worker is
 started by these interfaces.
+
+### Local runtime verified knowledge (fork, Issue #6)
+
+`POST /api/v1/copilot/work` with `{action:"knowledge",work_id,work_token}`
+requires `copilot:work`, message/conversation read scopes and the full current
+key/operator/session/lease/inbound guard. It returns policy mode/revision, a reason
+and an optional unexpired human-curated exact answer with source reference. It
+cannot curate or approve answers. MCP maps this to `get_verified_reply_context`.
+The one-shot host and its bounded synthetic acceptance are documented in
+[local runtime](copilot-runtime.md). No resident listener or live deployment is
+created by that implementation.

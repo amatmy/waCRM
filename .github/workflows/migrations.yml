@@ -23,11 +23,17 @@ on:
     # filters. GitHub leaves a required check that never ran stuck as
     # "expected", which blocks every PR that doesn't touch SQL.
     paths:
+      - 'src/lib/copilot/**'
+      - 'src/app/api/v1/copilot/**'
+      - 'mcp-server/**'
       - 'supabase/**'
       - '.github/workflows/migrations.yml'
   push:
     branches: [main]
     paths:
+      - 'src/lib/copilot/**'
+      - 'src/app/api/v1/copilot/**'
+      - 'mcp-server/**'
       - 'supabase/**'
       - '.github/workflows/migrations.yml'
 
@@ -87,7 +93,10 @@ jobs:
       - name: Install test dependencies
         run: npm ci
 
+      - name: Build guarded MCP for runtime integration
+        run: npm ci --prefix mcp-server && npm run build --prefix mcp-server
+
       - name: Verify guarded dispatch against real Postgres and synthetic provider
         env:
           COPILOT_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
-        run: npm test -- src/lib/copilot/service.integration.test.ts src/lib/copilot/crm.integration.test.ts src/lib/copilot/work.integration.test.ts --maxWorkers=1
+        run: npm test -- src/lib/copilot/service.integration.test.ts src/lib/copilot/crm.integration.test.ts src/lib/copilot/work.integration.test.ts src/lib/copilot/runtime.integration.test.ts --maxWorkers=1

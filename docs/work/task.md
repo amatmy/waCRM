@@ -1,82 +1,90 @@
-# Next Work Task — Issue #6: Callable local inference during human activity
+# Next Work Task — Issue #7: Human inbox controls and immediate takeover
 
 Repository: `amatmy/waCRM`. Read `AGENTS.md`, roadmap
-https://github.com/amatmy/waCRM/issues/9, Issue #6
-https://github.com/amatmy/waCRM/issues/6 and current comments before starting.
-This is the next separately initiated task. The Issue #5 run stops at its PR,
-validation and GitHub reporting; it does not start #6. GitHub Issues/PRs own scope,
-decisions, blockers and verified outcomes.
+https://github.com/amatmy/waCRM/issues/9, Issue #7
+https://github.com/amatmy/waCRM/issues/7 and their current comments first.
+This is a **separately initiated** next task. The Issue #6 run stops at its PR,
+validation and GitHub reporting; it must not start #7. GitHub Issues/PRs own
+scope, decisions, blockers and verified outcomes.
 
-## Verify dependencies first
+## Verify the review stack
 
-PRs #10 (sessions), #11 (guarded replies), #12 (controlled CRM/hybrid) and the
-Issue #5 PR #13 (https://github.com/amatmy/waCRM/pull/13) on
-`feat/issue-5-durable-inbound` form a review stack. Base of #5 is
-PR #12 head `d0b2873b72059cfeaeda7df2afb213b27ebf1c64` at implementation start.
-Read the live PR state and exact heads; all were unmerged during #5. Do not infer
-merge from green checks, and do not merge/deploy without separate user approval.
-Use an isolated branch based on the correct dependency head and document it on #6.
+Read live PR state and exact heads for #10 (sessions), #11 (guarded replies),
+#12 (CRM/hybrid), #13 (durable inbound), and the Issue #6 PR from
+`feat/issue-6-local-runtime`, based on #13 head
+`2e2b1fa8ac991a45641dc18a7e9c10b8db3e1f29` at implementation start.
+They were open/unmerged during #6. Use an isolated branch from the correct
+current dependency head and document that base on #7. Do not infer a merge from
+passing checks. Do not merge or deploy without separate explicit user approval.
 Preserve upstream MIT attribution/history.
 
 Read `docs/copilot.md`, `docs/copilot-dispatch.md`, `docs/copilot-crm.md`,
-`docs/copilot-work.md`, `docs/work/issue-5-results.md`, migrations and tests.
-The inherited dependency audit still flags critical Next.js and other app/MCP
-advisories; the five inherited local DB security warnings also remain. These are
-release blockers tracked in #1/#9, not permission for unrelated upgrades during #6.
+`docs/copilot-work.md`, `docs/copilot-runtime.md`, `docs/work/issue-6-results.md`,
+the model evaluation JSON, current API routes, migrations and tests.
+Read the installed Next.js guides required by `AGENTS.md` before writing code.
 
-## Objective when the user starts #6
+## Issue #7 objective only when the user starts it
 
-Evaluate a locally hosted model/runtime on the actual available hardware. Verify
-license, supported invocation, resource use and latency using primary sources
-and actual local tests. No paid inference APIs, browser automation of consumer
-chat, or assumption that ChatGPT/Dot is a continuous webhook listener. Interactive
-MCP clients remain interactive until an invoked runtime and writes are proven.
-Do not install/download an arbitrary large model without checking hardware,
-license and the task's resource constraints first.
+Implement human-facing Start assistance / Pause, activity-based heartbeat,
+current lease status, AI/human conversation state and immediate takeover.
+Opening the app, a background tab, an AI worker or a scheduled clock must never
+activate/renew a human session. Assistance exists while an explicitly consenting
+human is working, with no scheduled shifts or 24/7 requirement.
 
-Implement the local processor and REST/MCP adapter for the existing callable
-`runWorkCycle`/work protocol, keeping credentials and lease capabilities outside
-model-generated authority. Prove stored inbound → local decision → server-guarded
-reply or human handoff during an explicitly active human session. Use bounded,
-callable cycles while the human is working, with explicit lease renewal if needed;
-no scheduled AI shifts or requirement for 24/7 execution. Do not auto-start or
-renew a human session from a worker/model. UI heartbeat/presence remains #7.
+Use the existing authenticated human control APIs and server guards. Handle
+multiple tabs/replacement generations, idle/background states, loss of
+connectivity and expired sessions conservatively. Show acknowledged server state;
+a pending or failed takeover/pause is not confirmation. Never make a human
+heartbeat from the model/worker, infer permission from app presence alone or
+expose server keys/work capabilities to browser/model code.
 
-Treat customer messages and retrieved documents as untrusted data. Use verified
-business sources and preserve the exact server-authorized hybrid policy; the model
-cannot mark its own knowledge verified, approve replies, substitute identities or
-override permissions. Negotiation/refund/dispute/uncertainty and requests for a
-person require human approval/handoff. Never add raw-send/broadcast bypasses.
+Preserve unfinished work on pause. Distinguish pending work, a live worker lease,
+an immutable draft waiting for approval, audited handoff, ambiguous provider
+attempt and completed task/delivery. Human queue resolution is an attestation,
+not provider reconciliation. Do not retry/recreate unknown or dispatching attempts
+or replace stale immutable outboxes automatically. Already-submitted provider
+requests cannot be recalled. Do not claim the one-shot local host is an always-on
+listener; a UI-triggered runtime integration needs an explicitly scoped design,
+server-only credentials and bounded invocation, never consumer-chat automation.
 
-## Recovery and safety contracts to retain
+## Contracts to retain
 
-- Queue claims mint token/revision generations and cap worker leases by human
-  expiry. Supply the current `work_token` to all queued reply/CRM/context actions;
-  delayed/cancelled model results must fail after expiry/restart/takeover/new inbound.
-- The trusted ingestion-completion marker gates all AI processing after native
-  flow/automation handling. Incomplete historical/interrupted ingress requires
-  explicit human review; do not guess readiness or replay native effects.
-- Canonical DB storage and bounded REST reconciliation own pending work; best-effort
-  fan-out is only a wake-up hint. Raw envelopes lost before CRM storage remain an
-  upstream ingress limitation, not something REST can reconstruct.
-- The outbox/action log remain authoritative. Never retry/recreate unknown or
-  dispatching provider attempts. An already-submitted request cannot be recalled.
-- One immutable outbox per inbound remains. Recovery of stale drafts goes to a
-  human; no automatic replacement/reapproval. Human `resolve_work` records an
-  explicit task-resolution attestation, not delivery or provider reconciliation.
-- `runWorkCycle` provides a bounded injected-processor seam, not an already running
-  local model/worker host. A host waiting for approval must renew a still-live
-  lease while the human remains active, otherwise use the conservative human path.
+- Exact account/key/operator/session/inbound/ownership/work generations fence
+  all reads, replies and CRM actions. Final server checks reject stale results.
+- Only exact human-curated unexpired knowledge can auto-authorize hybrid replies;
+  missing/risky/uncertain knowledge and requests for a person require human handling.
+  Customer and source text remain untrusted. No raw send/broadcast bypasses.
+- Local runtime is `llama.cpp` with pinned Qwen3-0.6B Q8_0, loopback-only, offline,
+  bounded one-shot cycles. Model decisions contain no generated authority.
+  Tiny synthetic hardware evidence is not general model or production acceptance.
+- Trusted ingestion completion gates processing after native handling. Incomplete
+  historical ingress needs a human; do not replay native effects or invent readiness.
+- Canonical storage and bounded reconciliation own work, not wake-up notifications.
+  Envelopes lost before CRM storage remain an upstream ingress limitation.
+- Audited handoff checkpoints awaiting-human work and closes the attempt atomically.
+  One-shot host releases an unapproved draft for conservative human recovery rather
+  than claiming it can wait/renew indefinitely.
 
-## Tests and delivery
+## Validation and stop rule
 
-Use stored synthetic messages and fake WhatsApp transport only. Test local model
-availability/failure/timeout, prompt injection and unknown knowledge, active/pause/
-restart, two workers, delayed results, key/role revocation, tenant isolation and
-human takeover. Distinguish actual local-model evidence from injected/mocked tests.
-Run full application/MCP tests, types/lint/build, clean migrations, SQL/RLS and
-real local Postgres races; record exact commands/counts and CI links in #6/#9 and
-all affected dependency issues. No real WhatsApp message, paid API, deployment or
-merge. Do not implement the human UI (#7) or live acceptance (#8) as part of #6.
-Open and attach a PR, document outcomes and limits, update this brief for the next
-task, stop at #6, and preserve unrelated local containers/data.
+Use synthetic stored messages/fake WhatsApp transport and disposable loopback
+Postgres only. No paid AI API, real WhatsApp message, deployment, merge or live
+acceptance (#8). Do not download a larger model or modify unrelated running apps.
+The #6 evaluation had high memory/swap and low disk headroom; portable inference
+artifacts are outside source control and no resident service is installed.
+
+Test visible human controls, role/tenant boundaries, explicit consent, pause,
+activity/idle/connectivity transitions, multiple tabs/replaced generations,
+takeover acknowledgements and preservation of unfinished/unknown work. Run
+relevant UI checks plus complete app/MCP/type/lint/build and local database/race/
+SQL/RLS checks. CI's database workflow builds MCP and includes the deterministic
+runtime adapter suite; actual-model hardware evaluation is separately opt-in.
+Record exact commands/counts, tested head, CI links, fixes, residual risks and
+review-stack state in #7/#9 and all affected dependency issues. Open and attach a
+reviewable PR, document results, update this file for the separately initiated
+next task, then **STOP after #7**.
+
+Inherited release blockers remain: application/MCP dependency advisories
+(including critical Next.js), five local DB security warnings, existing lint
+warnings, and outstanding live acceptance. These are tracked in #1/#9; no unrelated
+upgrade or release is implicitly authorized by a successful local test.

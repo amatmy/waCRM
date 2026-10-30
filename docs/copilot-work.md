@@ -3,7 +3,7 @@
 Delivery status is in [Issue #5](https://github.com/amatmy/waCRM/issues/5) and
 [roadmap #9](https://github.com/amatmy/waCRM/issues/9). This builds on unmerged
 PRs #10–#12, preserving the existing session, ownership, outbox and CRM guards.
-No inference runtime, resident worker, deployment or real WhatsApp acceptance
+Issue #6 adds a separately invoked local inference adapter (`docs/copilot-runtime.md`). No resident worker, deployment or real WhatsApp acceptance
 is included. The human has no scheduled AI shift or 24/7 obligation.
 
 ## Storage and notification boundary
@@ -154,7 +154,7 @@ rewritten. This is **human attestation of task resolution**, not proof of delive
 and not provider-outcome reconciliation. It never edits/resets/resends an unknown
 outbox entry. The next inbound is still subject to human ownership/release.
 
-## Callable cycle for a future runtime
+## Callable cycle and explicit local host
 
 `src/lib/copilot/worker.ts` exports `runWorkCycle(client, sessionId, propose)`.
 It reconciles/claims one job and invokes a host-supplied proposal function with
@@ -169,8 +169,8 @@ drafts wait for exact human approval. A host handling longer processing or human
 approval must explicitly renew the still-live work lease while human activity
 continues. Without renewal, stale drafts require the conservative human path.
 The callable cycle does not launch a daemon, activate a session, select/download
-a model, call inference APIs or assume a connected chat is a listener. A real
-runtime/REST-client adapter and host lifecycle are Issue #6; human UI is #7.
+a model, call inference APIs or assume a connected chat is a listener. The Issue #6 one-shot runtime/MCP adapter is documented in
+`docs/copilot-runtime.md`; human UI is #7.
 
 ## Access and evidence
 
@@ -187,3 +187,9 @@ Verification uses synthetic accounts/messages, a real disposable loopback
 Postgres, fake provider, actual MCP stdio/SDK fixtures and an injected synthetic
 proposal function. This is not live Meta delivery or local-model quality evidence.
 Commands/results and remaining release blockers are in `docs/work/issue-5-results.md`.
+
+Issue #6 extends work with `knowledge` / MCP `get_verified_reply_context`. It takes
+`work_id` and `work_token`, enforces the complete active-generation guard, and
+returns only current exact verified knowledge and its human source reference. It
+does not approve or curate answers. Audited queued handoff/assignment atomically
+records `awaiting_human` and closes the attempt.

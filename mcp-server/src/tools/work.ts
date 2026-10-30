@@ -46,6 +46,18 @@ export function registerWorkTools(server: McpServer, client: WacrmClient) {
       jsonResult(await client.copilotWork({ action: 'inspect', ...args }))
     )
   );
+  server.registerTool(
+    'get_verified_reply_context',
+    {
+      description:
+        'Read only the unexpired human-verified exact answer for this leased inbound, with source reference and policy. Missing/risky knowledge requires a human. Cannot curate or supply facts.',
+      inputSchema: { work_id, work_token },
+      annotations: { ...annotations, readOnlyHint: true },
+    },
+    handle(async (args) =>
+      jsonResult(await client.copilotWork({ action: 'knowledge', ...args }))
+    )
+  );
   for (const [name, action, description] of [
     [
       'renew_inbound_work',

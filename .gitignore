@@ -46,3 +46,7 @@ next-env.d.ts
 # supabase
 supabase/.temp/
 supabase/.branches/
+
+# Local inference artifacts stay outside source control.
+.local-runtime/
+*.gguf
