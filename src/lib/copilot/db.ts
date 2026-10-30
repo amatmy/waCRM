@@ -37,7 +37,7 @@ export async function transaction<T>(
   try {
     await client.query('BEGIN');
     await client.query(
-      "SET LOCAL lock_timeout = '5s'; SET LOCAL statement_timeout = '15s'; SET LOCAL idle_in_transaction_session_timeout = '15s'"
+      "SET LOCAL lock_timeout = '12s'; SET LOCAL statement_timeout = '15s'; SET LOCAL idle_in_transaction_session_timeout = '15s'"
     );
     const result = await fn(client);
     await client.query('COMMIT');

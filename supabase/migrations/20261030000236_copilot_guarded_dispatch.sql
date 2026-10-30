@@ -25,7 +25,7 @@ CREATE TABLE public.copilot_outbox (
   state text NOT NULL DEFAULT 'draft' CHECK (state IN ('draft','approved','dispatching','sent','unknown','failed','cancelled')),
   approved_by uuid,
   approved_at timestamptz,
-  provider_message_id text UNIQUE,
+  provider_message_id text,
   error_code text,
   attempted_at timestamptz,
   reconciled_by uuid,
@@ -33,6 +33,7 @@ CREATE TABLE public.copilot_outbox (
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   UNIQUE (key_id, idempotency_key),
+  UNIQUE (account_id, provider_message_id),
   -- Single attempt per inbound, even if a caller changes its idempotency key.
   UNIQUE (conversation_id, inbound_id)
 );
@@ -114,7 +115,7 @@ BEGIN
     IF NEW.sender_type = 'customer' THEN
       -- BEFORE INSERT also runs for ON CONFLICT DO NOTHING webhook replays.
       -- A duplicate must not point the conversation at an uninserted UUID.
-      IF NOT EXISTS(SELECT 1 FROM public.messages WHERE id=NEW.id OR (NEW.message_id IS NOT NULL AND message_id=NEW.message_id)) THEN
+      IF NOT EXISTS(SELECT 1 FROM public.messages WHERE id=NEW.id OR (conversation_id=NEW.conversation_id AND NEW.message_id IS NOT NULL AND message_id=NEW.message_id)) THEN
         UPDATE public.conversations SET copilot_latest_inbound_id = NEW.id WHERE id = NEW.conversation_id;
       END IF;
     ELSIF NEW.sender_type = 'agent' THEN

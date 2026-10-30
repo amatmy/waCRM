@@ -43,7 +43,7 @@ it.each([400, 401, 403, 429])(
     expect(fetchMock).toHaveBeenCalledTimes(1);
   }
 );
-it.each([500, 502, 503])(
+it.each([408, 409, 500, 502, 503])(
   'does not retry an ambiguous provider %s response',
   async (status) => {
     fetchMock.mockResolvedValue(new Response('{}', { status }));

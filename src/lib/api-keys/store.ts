@@ -16,6 +16,7 @@ import { ApiError } from '@/lib/api/v1/respond';
 
 /** Shape of an `api_keys` row as the auth path consumes it. */
 export interface ApiKeyRow {
+  copilot_bound?: boolean;
   id: string;
   account_id: string;
   created_by: string | null;
@@ -58,7 +59,23 @@ export async function findActiveKeyByHash(
     return null;
   }
 
-  return data as ApiKeyRow;
+  // Binding is durable identity, not a mutable scope convention. A key stays
+  // restricted even if an admin accidentally removes copilot:act later.
+  const binding = await supabaseAdmin()
+    .from('copilot_keys')
+    .select('operator_id')
+    .eq('key_id', data.id)
+    .eq('account_id', data.account_id)
+    .maybeSingle();
+  if (binding.error)
+    throw new ApiError(
+      'unavailable',
+      'Copilot key binding could not be verified',
+      503
+    );
+  return binding.data?.operator_id
+    ? ({ ...data, copilot_bound: true } as ApiKeyRow)
+    : (data as ApiKeyRow);
 }
 
 /**

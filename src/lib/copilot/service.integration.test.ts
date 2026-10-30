@@ -19,7 +19,9 @@ if (url && !['127.0.0.1', 'localhost', '[::1]'].includes(new URL(url).hostname))
     'Copilot integration tests require an isolated loopback database'
   );
 describe.skipIf(!url)('copilot real-database authorization and races', () => {
+  const applicationName = `copilot-test-${randomUUID()}`;
   const pool = new Pool({
+    application_name: applicationName,
     connectionString: url,
     max: 8,
     connectionTimeoutMillis: 3000,
@@ -136,6 +138,37 @@ describe.skipIf(!url)('copilot real-database authorization and races', () => {
     ]);
   });
   afterAll(() => pool.end());
+
+  it('database connection loss aborts the provider attempt and keeps a non-retryable durable outcome', async () => {
+    const row = await approved();
+    let enter!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve;
+    });
+    provider.mockImplementation((_input?: unknown, signal?: AbortSignal) => {
+      enter();
+      return new Promise<string>((_resolve, reject) => {
+        signal!.addEventListener(
+          'abort',
+          () => reject(new Error('synthetic aborted connection')),
+          { once: true }
+        );
+      });
+    });
+    const sending = service.dispatch(actor(), row.id);
+    await entered;
+    const target = (
+      await pool.query(
+        "SELECT pid FROM pg_stat_activity WHERE application_name=$1 AND state='idle in transaction'",
+        [applicationName]
+      )
+    ).rows;
+    expect(target).toHaveLength(1);
+    await pool.query('SELECT pg_terminate_backend($1)', [target[0].pid]);
+    expect((await sending).state).toBe('unknown');
+    await service.dispatch(actor(), row.id);
+    expect(provider).toHaveBeenCalledTimes(1);
+  });
 
   it('requires exact human approval, persists one message and suppresses duplicate dispatch', async () => {
     const row = await draft();
@@ -324,12 +357,63 @@ describe.skipIf(!url)('copilot real-database authorization and races', () => {
       service.reconcile(human(), row.id, 'wamid.verified')
     ).rejects.toMatchObject({ status: 409 });
     await pool.query(
+      "INSERT INTO messages(conversation_id,sender_type,content_text) VALUES($1,'agent','Later human reply')",
+      [conversationId]
+    );
+    await pool.query(
+      "UPDATE conversations SET last_message_text='Later human reply',last_message_at=clock_timestamp()+interval '1 second' WHERE id=$1",
+      [conversationId]
+    );
+    await pool.query(
       "INSERT INTO pending_message_statuses(account_id,wamid,status) VALUES($1,'wamid.verified','delivered')",
       [accountId]
     );
     expect(
       (await service.reconcile(human(), row.id, 'wamid.verified')).state
     ).toBe('sent');
+    await expect(service.dispatch(actor(), row.id)).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(provider).toHaveBeenCalledTimes(1);
+    const history = (
+      await pool.query(
+        "SELECT status,created_at FROM messages WHERE conversation_id=$1 AND message_id='wamid.verified'",
+        [conversationId]
+      )
+    ).rows[0];
+    expect(history.status).toBe('delivered');
+    expect(
+      (
+        await pool.query(
+          'SELECT last_message_text FROM conversations WHERE id=$1',
+          [conversationId]
+        )
+      ).rows[0].last_message_text
+    ).toBe('Later human reply');
+  });
+  it('reconciliation preserves failed provider attempts in conversation history without resending', async () => {
+    const row = await approved();
+    provider.mockRejectedValue(new Error('lost response'));
+    await service.dispatch(actor(), row.id);
+    await pool.query(
+      "INSERT INTO pending_message_statuses(account_id,wamid,status) VALUES($1,'wamid.failed-receipt','failed')",
+      [accountId]
+    );
+    const result = await service.reconcile(
+      human(),
+      row.id,
+      'wamid.failed-receipt'
+    );
+    expect(result.state).toBe('failed');
+    expect(result.reconciled_by).toBe(userId);
+    expect(
+      (
+        await pool.query(
+          "SELECT status FROM messages WHERE conversation_id=$1 AND message_id='wamid.failed-receipt'",
+          [conversationId]
+        )
+      ).rows[0].status
+    ).toBe('failed');
     await service.dispatch(actor(), row.id);
     expect(provider).toHaveBeenCalledTimes(1);
   });
@@ -425,6 +509,34 @@ describe.skipIf(!url)('copilot real-database authorization and races', () => {
     });
     expect(provider).not.toHaveBeenCalled();
   });
+  it('a message ID in another tenant cannot suppress a new inbound or authorize a stale reply', async () => {
+    const row = await approved();
+    const contact = (
+      await pool.query(
+        "INSERT INTO contacts(user_id,account_id,phone) VALUES($1,$2,'+15557654321') RETURNING id",
+        [otherUserId, otherAccountId]
+      )
+    ).rows[0].id;
+    const otherConversation = (
+      await pool.query(
+        'INSERT INTO conversations(user_id,account_id,contact_id) VALUES($1,$2,$3) RETURNING id',
+        [otherUserId, otherAccountId, contact]
+      )
+    ).rows[0].id;
+    const wamid = `wamid.collision.${randomUUID()}`;
+    await pool.query(
+      "INSERT INTO messages(conversation_id,sender_type,content_text,message_id) VALUES($1,'customer','Other tenant',$2)",
+      [otherConversation, wamid]
+    );
+    await pool.query(
+      "INSERT INTO messages(conversation_id,sender_type,content_text,message_id) VALUES($1,'customer','New original-tenant context',$2)",
+      [conversationId, wamid]
+    );
+    await expect(service.dispatch(actor(), row.id)).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(provider).not.toHaveBeenCalled();
+  });
   it('a duplicate webhook upsert does not move the inbound pointer to an uninserted UUID', async () => {
     const row = await approved();
     const wamid = (
@@ -433,7 +545,7 @@ describe.skipIf(!url)('copilot real-database authorization and races', () => {
       ])
     ).rows[0].message_id;
     await pool.query(
-      "INSERT INTO messages(conversation_id,sender_type,content_text,message_id) VALUES($1,'customer','Replay',$2) ON CONFLICT(message_id) DO NOTHING",
+      "INSERT INTO messages(conversation_id,sender_type,content_text,message_id) VALUES($1,'customer','Replay',$2) ON CONFLICT DO NOTHING",
       [conversationId, wamid]
     );
     expect((await service.dispatch(actor(), row.id)).state).toBe('sent');

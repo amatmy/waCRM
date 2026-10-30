@@ -4,16 +4,24 @@ import { ApiError } from '@/lib/api/v1/respond';
 
 const lookup = vi.hoisted(() => ({
   result: { data: null as unknown, error: null as unknown },
+  binding: { data: null as unknown, error: null as unknown },
 }));
 
 vi.mock('@/lib/flows/admin-client', () => ({
   supabaseAdmin: () => {
+    let tableName = '';
     const builder = {
       select: () => builder,
       eq: () => builder,
-      maybeSingle: async () => lookup.result,
+      maybeSingle: async () =>
+        tableName === 'copilot_keys' ? lookup.binding : lookup.result,
     };
-    return { from: () => builder };
+    return {
+      from: (table: string) => {
+        tableName = table;
+        return builder;
+      },
+    };
   },
 }));
 
@@ -31,10 +39,28 @@ const activeRow = {
 
 beforeEach(() => {
   lookup.result = { data: null, error: null };
+  lookup.binding = { data: null, error: null };
   vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
 describe('findActiveKeyByHash', () => {
+  it('marks a bound key independently of its mutable scopes', async () => {
+    lookup.result = {
+      data: { ...activeRow, scopes: ['contacts:write'] },
+      error: null,
+    };
+    lookup.binding = { data: { operator_id: 'human' }, error: null };
+    await expect(findActiveKeyByHash('h')).resolves.toMatchObject({
+      copilot_bound: true,
+    });
+  });
+  it('fails closed when durable key binding cannot be checked', async () => {
+    lookup.result = { data: activeRow, error: null };
+    lookup.binding = { data: null, error: { message: 'unavailable' } };
+    await expect(findActiveKeyByHash('h')).rejects.toMatchObject({
+      status: 503,
+    });
+  });
   it('returns the row for an active key', async () => {
     lookup.result = { data: activeRow, error: null };
     await expect(findActiveKeyByHash('h')).resolves.toEqual(activeRow);

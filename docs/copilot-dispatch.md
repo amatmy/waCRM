@@ -9,7 +9,7 @@ in [Issue #3](https://github.com/amatmy/waCRM/issues/3) and [roadmap #9](https:/
 
 Each API key is bound by an account admin to a current human operator. Keys
 must have only `copilot:act` and optional contact/conversation/message read
-scopes. The human starts their session through #10's human endpoint. The server
+scopes. Binding identity continues to block legacy writes even if an admin later edits the scopes. The human starts their session through #10's human endpoint. The server
 claims a conversation for the key and session generation and returns an
 ownership revision plus the latest inbound ID. Native human assignments remain
 in `assigned_agent_id`; claim does not overwrite them. Any human assignee,
@@ -43,6 +43,7 @@ do not replace the pointer with an uninserted UUID.
 If takeover/pause/context change wins before dispatch authorization, the reply
 is refused, including a model result produced earlier. If provider submission
 already started under the locks, takeover/pause waits for that bounded attempt.
+Callers must confirm success/status before treating a takeover or pause as complete; a timed-out/failed control request is not an acknowledgement.
 After takeover/pause succeeds, no further AI submission can begin under the old
 authority. A provider-accepted request cannot be recalled: WhatsApp may deliver
 it later, including after a timeout and human takeover. This protocol does not
@@ -63,7 +64,7 @@ The second transaction rechecks everything before submission. A crash in the
 small gap may leave an unsent latch; safety favors an unresolved record over a
 duplicate. No automatic retry or reset-to-approved operation exists.
 
-HTTP 4xx is terminal rejected; timeouts, HTTP 5xx, malformed success and uncertain
+HTTP 4xx other than 408/409 is terminal rejected; timeouts, HTTP 408/409/5xx, malformed success and uncertain
 database completion are indeterminate. Inspect the stored outcome rather than
 preparing a new request. If the database is unavailable, a committed dispatch
 latch remains sufficient to prevent replay after recovery.
@@ -74,7 +75,7 @@ receipt for that ID/account already stored by the existing signature-verified
 Meta webhook in `pending_message_statuses`. A human is responsible for matching
 the receipt to the correct attempted message; account receipt presence alone
 does not prove content correlation. Reconciliation persists the result/history
-and records the human and timestamp; it never resends. No receipt or expired
+and records the human and timestamp; it never resends. Late receipts retain the original attempt timestamp and do not overwrite a newer human conversation preview. Failed receipts are retained in message history too. No receipt or expired
 receipt retention means the outcome stays quarantined. Automatic correlation,
 background reconciliation and queue recovery remain #5; real-provider proof is
 #8. `sent` records provider acceptance, not guaranteed customer delivery.
@@ -104,7 +105,7 @@ Configure `COPILOT_DATABASE_URL` as a **server-only** privileged Postgres URL fo
 this same CRM database. Use a direct or session-pooler connection with proper
 TLS verification; never expose it to the browser/MCP host or configure it as a
 `NEXT_PUBLIC_` variable. `pg@8.23.1` is the only new runtime dependency. The pool
-is bounded to four connections; locks time out after five seconds and the
+is bounded to four connections; locks time out after twelve seconds and the
 provider attempt after ten. This feature introduces no inference API or model.
 
 Human control: cookie authentication, agent+ (admin for policy/binding), same

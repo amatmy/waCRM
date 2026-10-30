@@ -5,17 +5,15 @@ copilot that assists during the human operator's active session, with hybrid
 replies and explicit human handoff. No scheduled AI shifts, 24/7 requirement,
 or paid AI inference API is part of the copilot design.
 
-**Work is in progress.** The first implementation adds human session leases
-and a read-only profile to the existing MCP server. Autonomous replies and
-handoff enforcement are future milestones. The upstream AI settings described
+**Work is in progress.** The review branches implement human session leases plus guarded, human-approved replies and explicit handoff through the existing MCP server. Automatic routine replies, local inference, inbox controls and real WhatsApp acceptance remain later milestones. The upstream AI settings described
 below use provider APIs; leave them unconfigured for this copilot workflow.
 
 [Roadmap and acceptance gates](https://github.com/amatmy/waCRM/issues/9) ·
 [Architecture and local setup](docs/copilot.md) ·
-[Upstream audit](docs/copilot-upstream-audit.md)
+[Upstream audit](docs/copilot-upstream-audit.md) ·
+[Guarded dispatch contract](docs/copilot-dispatch.md)
 
 ## Upstream project
-
 
 > Self-hostable CRM template for WhatsApp® — shared inbox, contacts,
 > sales pipelines, broadcasts, and no-code automations. Fork it, brand
@@ -134,16 +132,16 @@ Kubernetes cluster.
 
 ### Why Hostinger?
 
-| | |
-|---|---|
-| **One-click Git deploy** | Connect your fork, push to `main`, Hostinger builds and ships it. No SSH, no Docker, no CI to wire up — this repo's own `main` deploys this way. |
-| **Managed Node.js** | Next.js 16 (App Router, server actions, ISR) runs out of the box on [Premium, Business, and Cloud](https://www.hostinger.com/web-apps-hosting?REFERRALCODE=WACRMHOST) shared plans. You don't manage Node versions, processes, or reverse proxies. |
-| **Free SSL + free domain** | Automatic Let's Encrypt on your custom domain (or a free one included with annual plans). HTTPS is on by default — required for the WhatsApp Business webhook. |
-| **Global CDN + LiteSpeed** | Static assets cached at the edge, dynamic routes served from LiteSpeed. Snappy dashboards out of the box, no Cloudflare setup required. |
-| **Env vars + logs in hPanel** | Set `SUPABASE_*`, `WHATSAPP_*`, and `ENCRYPTION_KEY` from the panel — no `.env` on the server. Live application logs in the same UI. |
-| **DDoS protection + daily backups** | Built-in, no add-ons. The webhook endpoint is a public target — having protection at the edge matters. |
-| **Cheaper than a VPS** | Plans start at a few dollars a month — order-of-magnitude less than a comparable managed Node.js host, and you don't pay extra for the database (that's Supabase). |
-| **24/7 human support** | Live chat support in 20+ languages — useful when your CRM is the thing your team relies on to talk to customers. |
+|                                     |                                                                                                                                                                                                                                                    |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **One-click Git deploy**            | Connect your fork, push to `main`, Hostinger builds and ships it. No SSH, no Docker, no CI to wire up — this repo's own `main` deploys this way.                                                                                                   |
+| **Managed Node.js**                 | Next.js 16 (App Router, server actions, ISR) runs out of the box on [Premium, Business, and Cloud](https://www.hostinger.com/web-apps-hosting?REFERRALCODE=WACRMHOST) shared plans. You don't manage Node versions, processes, or reverse proxies. |
+| **Free SSL + free domain**          | Automatic Let's Encrypt on your custom domain (or a free one included with annual plans). HTTPS is on by default — required for the WhatsApp Business webhook.                                                                                     |
+| **Global CDN + LiteSpeed**          | Static assets cached at the edge, dynamic routes served from LiteSpeed. Snappy dashboards out of the box, no Cloudflare setup required.                                                                                                            |
+| **Env vars + logs in hPanel**       | Set `SUPABASE_*`, `WHATSAPP_*`, and `ENCRYPTION_KEY` from the panel — no `.env` on the server. Live application logs in the same UI.                                                                                                               |
+| **DDoS protection + daily backups** | Built-in, no add-ons. The webhook endpoint is a public target — having protection at the edge matters.                                                                                                                                             |
+| **Cheaper than a VPS**              | Plans start at a few dollars a month — order-of-magnitude less than a comparable managed Node.js host, and you don't pay extra for the database (that's Supabase).                                                                                 |
+| **24/7 human support**              | Live chat support in 20+ languages — useful when your CRM is the thing your team relies on to talk to customers.                                                                                                                                   |
 
 ### The 60-second version
 
@@ -168,6 +166,7 @@ API config, and production deploy — lives at
 (source: [ArnasDon/wacrm-site](https://github.com/ArnasDon/wacrm-site)).
 
 Key pages:
+
 - [Getting started](https://wacrm.tech/docs/getting-started)
 - [Supabase setup](https://wacrm.tech/docs/supabase-setup)
 - [WhatsApp setup](https://wacrm.tech/docs/whatsapp-setup)
@@ -181,7 +180,7 @@ Key pages:
 - [Several WABAs on one deployment](./docs/multi-waba.md) — one Meta
   App or several; how `META_APP_SECRET` takes a comma-separated list
 - [Auth emails](./docs/auth-emails.md) — what Supabase must allow so
-  confirmation and password-reset links come back to *your* domain
+  confirmation and password-reset links come back to _your_ domain
   instead of `localhost:3000`, and how `/auth/callback` handles them
 
 ## Stack

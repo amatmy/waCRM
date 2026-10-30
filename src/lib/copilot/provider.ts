@@ -47,7 +47,11 @@ export async function sendCopilotText(
     }
   );
   if (!response.ok) {
-    if (response.status >= 400 && response.status < 500)
+    if (
+      response.status >= 400 &&
+      response.status < 500 &&
+      ![408, 409].includes(response.status)
+    )
       throw new ProviderRejected('Provider rejected the request');
     throw new Error('Provider outcome is unknown');
   }

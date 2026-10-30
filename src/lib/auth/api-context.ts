@@ -103,7 +103,7 @@ export async function requireApiKey(
     throw forbidden(`This API key is missing the '${scope}' scope`);
   }
 
-  if (row.scopes.includes('copilot:act') && scope && !['copilot:act','messages:read','contacts:read','conversations:read'].includes(scope)) {
+  if ((row.copilot_bound || row.scopes.includes('copilot:act')) && scope && !['copilot:act','messages:read','contacts:read','conversations:read'].includes(scope)) {
     throw forbidden('Copilot credentials cannot use legacy write or broadcast capabilities');
   }
 

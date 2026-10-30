@@ -7,7 +7,7 @@ This document describes the implementation and its boundaries.
 
 WhatsApp → existing CRM ingestion/database → durable pending work (planned) →
 active operator session → callable local runtime (planned) → extended existing
-MCP → server-enforced policy/ownership/send or human handoff (planned).
+MCP → server-enforced policy/ownership/outbox dispatch or human handoff (implemented in the guarded-dispatch review branch).
 
 The human explicitly starts assistance while working and pauses when finished.
 A short heartbeat lease detects a lost client; it is not a shift schedule.
@@ -117,5 +117,5 @@ back all test data. CI now runs it and the MCP protocol tests. Real WhatsApp
 and chosen-runtime acceptance remain #8; deployment is not part of this PR.
 
 Keep upstream native AI settings unconfigured: those paths use provider APIs
-and have a separate auto-reply lifecycle. This foundation introduces no model
+; native automatic provider dispatch is disabled in this fork. This foundation introduces no model
 dependency, key, provider call, scheduler, or listener.

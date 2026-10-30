@@ -37,6 +37,7 @@ export interface Outbox {
   reply_text: string;
   state: string;
   provider_message_id: string | null;
+  attempted_at?: Date | string | null;
 }
 const conflict = (message: string) => new ApiError('bad_request', message, 409);
 const missing = () => new ApiError('not_found', 'Resource not found', 404);
@@ -379,19 +380,44 @@ export class CopilotService {
     });
   }
 
-  private async accepted(c: PoolClient, row: Outbox, wamid: string) {
+  private async accepted(
+    c: PoolClient,
+    row: Outbox,
+    wamid: string,
+    status = 'sent'
+  ) {
     await c.query(
-      `UPDATE copilot_outbox SET state='sent',provider_message_id=$2,error_code=NULL,updated_at=clock_timestamp() WHERE id=$1`,
-      [row.id, wamid]
+      `UPDATE copilot_outbox SET state=$3,provider_message_id=$2,error_code=$4,updated_at=clock_timestamp() WHERE id=$1 AND account_id=$5`,
+      [
+        row.id,
+        wamid,
+        status === 'failed' ? 'failed' : 'sent',
+        status === 'failed' ? 'verified_provider_failure' : null,
+        row.account_id,
+      ]
     );
     await c.query(
-      `INSERT INTO messages(conversation_id,sender_type,content_type,content_text,message_id,status,ai_generated,reply_to_message_id)
-      SELECT $1,'bot','text',$2,$3,'sent',true,$4 WHERE NOT EXISTS(SELECT 1 FROM messages WHERE message_id=$3)`,
-      [row.conversation_id, row.reply_text, wamid, row.inbound_id]
+      `INSERT INTO messages(conversation_id,sender_type,content_type,content_text,message_id,status,ai_generated,reply_to_message_id,created_at)
+      SELECT $1,'bot','text',$2,$3,$5,true,$4,coalesce($6::timestamptz,clock_timestamp())
+      WHERE NOT EXISTS(SELECT 1 FROM messages WHERE conversation_id=$1 AND message_id=$3)`,
+      [
+        row.conversation_id,
+        row.reply_text,
+        wamid,
+        row.inbound_id,
+        status,
+        row.attempted_at ?? null,
+      ]
     );
     await c.query(
-      `UPDATE conversations SET last_message_text=$2,last_message_at=clock_timestamp(),updated_at=clock_timestamp() WHERE id=$1`,
-      [row.conversation_id, row.reply_text]
+      `UPDATE conversations SET last_message_text=$2,last_message_at=coalesce($3::timestamptz,clock_timestamp()),updated_at=clock_timestamp()
+      WHERE id=$1 AND account_id=$4 AND (last_message_at IS NULL OR last_message_at<=coalesce($3::timestamptz,clock_timestamp()))`,
+      [
+        row.conversation_id,
+        row.reply_text,
+        row.attempted_at ?? null,
+        row.account_id,
+      ]
     );
   }
   async dispatch(actor: KeyActor, id: string): Promise<Outbox> {
@@ -472,7 +498,7 @@ export class CopilotService {
             { ...eligible.rows[0], text: row.reply_text } as ProviderInput,
             controller.signal
           );
-          await this.accepted(c, row, wamid);
+          await this.accepted(c, current, wamid);
         } finally {
           clearTimeout(timeout);
           c.removeListener('error', onError);
@@ -536,12 +562,16 @@ export class CopilotService {
         throw conflict(
           'A stored signed-provider status receipt is required; do not retry'
         );
-      if (receipt.rows[0].status === 'failed')
-        await c.query(
-          "UPDATE copilot_outbox SET state='failed',provider_message_id=$2,error_code='verified_provider_failure',updated_at=clock_timestamp() WHERE id=$1",
-          [id, wamid]
+      const mismatch = await c.query(
+        `SELECT 1 FROM messages m JOIN conversations cv ON cv.id=m.conversation_id
+        WHERE cv.account_id=$1 AND m.message_id=$2 AND (m.conversation_id<>$3 OR m.content_text IS DISTINCT FROM $4)`,
+        [actor.accountId, wamid, row.conversation_id, row.reply_text]
+      );
+      if (mismatch.rows.length)
+        throw conflict(
+          'Provider ID already belongs to different conversation content'
         );
-      else await this.accepted(c, row, wamid);
+      await this.accepted(c, row, wamid, receipt.rows[0].status);
       await c.query(
         'UPDATE copilot_outbox SET reconciled_by=$2,reconciled_at=clock_timestamp() WHERE id=$1',
         [id, actor.userId]
