@@ -279,6 +279,10 @@ export function createRemoteServer(cfg: RemoteConfig) {
         return;
       }
       if (!authenticate(match[1], cfg)) {
+        res.setHeader(
+          'WWW-Authenticate',
+          `Bearer resource_metadata="${new URL(cfg.resource).origin}/.well-known/oauth-protected-resource/mcp"`
+        );
         res.writeHead(401).end();
         return;
       }

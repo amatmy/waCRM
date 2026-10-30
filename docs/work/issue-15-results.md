@@ -58,7 +58,7 @@ Failures encountered and corrected: a concurrent-scope fixture initially asserte
 a misspelled tool name; the SDK returns `isError` rather than rejecting a call to
 an unavailable tool; and the Postgres ownership trigger initially recorded an
 attempt as `ownership_changed` before the handoff checkpoint could annotate it.
-The checkpoint now preserves the trigger's original end timestamp and records
+A final expiry-during-identity-lookup test initially failed because its delay fixture omitted a parameter; after correcting the fixture it confirmed that an expired token receives an OAuth challenge. The checkpoint now preserves the trigger's original end timestamp and records
 `human_handoff` for the same fenced attempt. Final suites above pass.
 
 ## Evidence boundary and next action

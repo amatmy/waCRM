@@ -31,12 +31,14 @@ function jwt(overrides = {}, header = {}) {
 async function fixture(
   t,
   enableWrites = false,
-  backendAccount = 'crm-account'
+  backendAccount = 'crm-account',
+  delayMs = 0
 ) {
   const requests = [];
   const backend = createServer(async (req, res) => {
     const chunks = [];
     for await (const c of req) chunks.push(c);
+    if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
     requests.push({
       path: req.url,
       auth: req.headers.authorization,
@@ -323,4 +325,24 @@ test('wire tool descriptors carry OAuth security schemes and validated JSON sche
   ]);
   assert.equal(handoff.inputSchema.type, 'object');
   assert.ok(handoff.inputSchema.required.includes('session_id'));
+});
+
+test('token expiring during CRM identity lookup receives an OAuth challenge and cannot invoke a tool', async (t) => {
+  const { url, requests } = await fixture(t, true, 'crm-account', 2200);
+  const token = jwt({ exp: Math.floor(Date.now() / 1000) + 2 });
+  const response = await fetch(`${url}/mcp`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json, text/event-stream',
+    },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+  });
+  assert.equal(response.status, 401);
+  assert.match(response.headers.get('www-authenticate'), /resource_metadata/);
+  assert.deepEqual(
+    requests.map((x) => x.path),
+    ['/api/v1/me']
+  );
 });
