@@ -15,12 +15,18 @@ GitHub Issues/PRs own decisions, delivery status and blockers.
   `51073f036860c04d5ddd19a2be81348407ed0350` at the Issue #4 review.
 - PR #11: https://github.com/amatmy/waCRM/pull/11 — guarded replies/outbox, head
   `ea9057373c18745a8368c64ce61213ef4c15a5a5` at the Issue #4 review; based on #10.
-- Issue #4 branch `feat/issue-4-controlled-crm`, based on #11. Consult its PR and
+- PR #12: https://github.com/amatmy/waCRM/pull/12 — Issue #4 branch
+  `feat/issue-4-controlled-crm`, based on #11. Consult this PR and
   `docs/work/issue-4-results.md` for exact tested head and CI evidence.
 - All remain unmerged unless GitHub now proves otherwise. Do not infer merge
   from green checks or merge any dependency without explicit user approval.
   Create an isolated branch from the correct dependency head and document the
   base on Issue #5. Preserve upstream MIT attribution/history.
+
+The Issue #4 dependency audit reports 13 inherited application advisories
+(including critical Next.js) and 7 MCP advisories. They remain release blockers
+tracked with the audit evidence in Issues #1/#4/#9; no dependency upgrades were
+performed during #4. Do not treat green tests as security or deployment approval.
 
 Read `docs/copilot.md`, `docs/copilot-dispatch.md`, `docs/copilot-crm.md`, the
 actual ingress/webhook and event-delivery code, and all copilot migrations/tests.

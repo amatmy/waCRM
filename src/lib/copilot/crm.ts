@@ -119,6 +119,17 @@ export class CopilotCrmService extends CopilotService {
     )
       throw conflict('Human session or key expired while waiting');
   }
+  private async contact(c: PoolClient, actor: KeyActor, contactId: string) {
+    if (
+      !(
+        await c.query(
+          'SELECT id FROM contacts WHERE id=$1 AND account_id=$2 FOR SHARE',
+          [contactId, actor.accountId]
+        )
+      ).rows.length
+    )
+      throw missing();
+  }
   async context(
     actor: KeyActor,
     conversationId: string,
@@ -133,6 +144,7 @@ export class CopilotCrmService extends CopilotService {
         { conversation_id: conversationId, session_id: sessionId },
         ownershipRevision
       );
+      await this.contact(c, actor, conv.contact_id);
       const operators = (
         await c.query(
           `SELECT user_id,full_name,account_role FROM profiles
@@ -206,6 +218,7 @@ export class CopilotCrmService extends CopilotService {
         input.ownership_revision,
         input.inbound_id
       );
+      await this.contact(c, actor, conv.contact_id);
       const p = input.payload;
       let result: unknown;
       if (input.action === 'assign') {

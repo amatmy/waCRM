@@ -65,12 +65,17 @@ Validation/authorization failures return errors and roll back all CRM writes;
 they do not create success audit rows. Unknown network outcomes for replies
 remain in the existing outbox, never in the CRM mutation log.
 
+Curated answers are included in the existing team-join data guard so joining
+another account cannot silently delete business knowledge.
+
 New public tables use account-member SELECT RLS and explicit grants. Direct
 anon/authenticated/service-role writes to policy knowledge or action outcomes
 are denied; the server-only database connection performs guarded transactions.
 The native inbox/contact/deal tables remain the CRM source of truth. Native
 conversation status, contact or account changes now revoke old claims and
-approvals as assignment and pause already do. Summaries and message history are
+approvals as assignment and pause already do. Contact/account changes also clear the latest-inbound pointer, requiring fresh
+context after human release. CRM actions explicitly lock and verify that the
+conversation contact belongs to the same account. Summaries and message history are
 preserved. No history reset or implicit human release is provided to the AI.
 
 ## Hybrid reply policy

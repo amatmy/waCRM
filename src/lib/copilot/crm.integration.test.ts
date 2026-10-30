@@ -346,6 +346,55 @@ describe.skipIf(!url)('controlled CRM and hybrid policy', () => {
       ).rows[0].n
     ).toBe(1);
   });
+  it('rejects a foreign contact relationship even in an account-owned conversation', async () => {
+    const contact = (
+      await pool.query(
+        "INSERT INTO contacts(account_id,user_id,phone,name) VALUES($1,$2,'+15559876543','Foreign fixture') RETURNING id",
+        [otherAccountId, otherUserId]
+      )
+    ).rows[0].id;
+    await pool.query('UPDATE conversations SET contact_id=$2 WHERE id=$1', [
+      conversationId,
+      contact,
+    ]);
+    expect(
+      (
+        await pool.query(
+          'SELECT copilot_latest_inbound_id FROM conversations WHERE id=$1',
+          [conversationId]
+        )
+      ).rows[0].copilot_latest_inbound_id
+    ).toBeNull();
+    await service.takeover(human(), conversationId, true);
+    inboundId = (
+      await pool.query(
+        "INSERT INTO messages(conversation_id,sender_type,content_text,message_id) VALUES($1,'customer','New synthetic request',$2) RETURNING id",
+        [conversationId, `wamid.${randomUUID()}`]
+      )
+    ).rows[0].id;
+    const input = await action('note', {
+      note: 'must not reach a foreign contact',
+    });
+    await expect(service.perform(actor(), input)).rejects.toMatchObject({
+      status: 404,
+    });
+    await expect(
+      service.context(
+        actor(),
+        conversationId,
+        sessionId,
+        input.ownership_revision
+      )
+    ).rejects.toMatchObject({ status: 404 });
+    expect(
+      (
+        await pool.query(
+          'SELECT count(*)::int n FROM contact_notes WHERE account_id=$1',
+          [accountId]
+        )
+      ).rows[0].n
+    ).toBe(0);
+  });
   it('handoff atomically assigns the bound human, retains history, cancels replies and audits the result', async () => {
     const draft = await approved();
     const input = await action('handoff', {

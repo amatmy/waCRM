@@ -62,6 +62,9 @@ BEGIN
     NEW.copilot_key_id := NULL;
     NEW.copilot_session_id := NULL;
     NEW.copilot_revision := OLD.copilot_revision + 1;
+    IF NEW.contact_id IS DISTINCT FROM OLD.contact_id OR NEW.account_id IS DISTINCT FROM OLD.account_id THEN
+      NEW.copilot_latest_inbound_id := NULL;
+    END IF;
     IF NEW.assigned_agent_id IS NOT NULL OR NEW.status <> 'open' OR
        NEW.contact_id IS DISTINCT FROM OLD.contact_id OR NEW.account_id IS DISTINCT FROM OLD.account_id
     THEN NEW.ai_autoreply_disabled := true; END IF;
