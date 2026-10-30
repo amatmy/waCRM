@@ -691,6 +691,42 @@ describe.skipIf(!url)('controlled CRM and hybrid policy', () => {
       ).rows[0].n
     ).toBe(0);
   });
+  it('curated business knowledge prevents destructive account replacement when joining a team', async () => {
+    const foreignHuman = { accountId: otherAccountId, userId: otherUserId };
+    await service.verifyBusinessAnswer(foreignHuman, {
+      question: 'Office hours?',
+      answer: 'Synthetic office hours',
+      source_reference: 'fixture',
+      expires_at: new Date(Date.now() + 3600000).toISOString(),
+    });
+    const token = randomUUID();
+    await pool.query(
+      "INSERT INTO account_invitations(account_id,token_hash,role,expires_at,created_by_user_id) VALUES($1,$2,'agent',clock_timestamp()+interval '1 hour',$3)",
+      [accountId, token, userId]
+    );
+    const c = await pool.connect();
+    try {
+      await c.query('BEGIN');
+      await c.query("SELECT set_config('request.jwt.claim.sub',$1,true)", [
+        otherUserId,
+      ]);
+      await c.query('SET LOCAL ROLE authenticated');
+      await expect(
+        c.query('SELECT redeem_invitation($1)', [token])
+      ).rejects.toMatchObject({ code: '23505' });
+    } finally {
+      await c.query('ROLLBACK');
+      c.release();
+    }
+    expect(
+      (
+        await pool.query(
+          'SELECT count(*)::int n FROM copilot_answers WHERE account_id=$1',
+          [otherAccountId]
+        )
+      ).rows[0].n
+    ).toBe(1);
+  });
   it('only admin humans can curate answers or change policy; risk markers cannot be allowlisted', async () => {
     await expect(
       knowledge('I want a refund', 'Ask the team')
