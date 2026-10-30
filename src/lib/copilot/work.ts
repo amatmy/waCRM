@@ -62,8 +62,8 @@ export class CopilotWorkService extends CopilotService {
         inserted +=
           (
             await c.query(
-              `INSERT INTO copilot_work(account_id,conversation_id,source_id,provider_message_id,ready,state)
-          SELECT cv.account_id,cv.id,m.id,m.message_id,m.copilot_ingress_completed,CASE WHEN m.copilot_ingress_completed AND m.copilot_ingress_consumed THEN 'completed' WHEN cv.copilot_latest_inbound_id=m.id THEN 'pending' ELSE 'superseded' END
+              `INSERT INTO copilot_work(account_id,conversation_id,source_id,provider_message_id,ready,state,outcome)
+          SELECT cv.account_id,cv.id,m.id,m.message_id,m.copilot_ingress_completed,CASE WHEN m.copilot_ingress_completed AND m.copilot_ingress_consumed THEN 'completed' WHEN cv.copilot_latest_inbound_id=m.id THEN 'pending' ELSE 'superseded' END, CASE WHEN m.copilot_ingress_completed AND m.copilot_ingress_consumed THEN jsonb_build_object('type','native_consumed') ELSE NULL END
           FROM messages m JOIN conversations cv ON cv.id=m.conversation_id WHERE m.id=$1 AND cv.account_id=$2
           AND m.sender_type='customer' AND m.copilot_verified_inbound AND m.message_id LIKE 'wamid.%'
           ON CONFLICT DO NOTHING`,

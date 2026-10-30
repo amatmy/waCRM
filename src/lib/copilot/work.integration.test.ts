@@ -527,9 +527,12 @@ describe.skipIf(!url)('durable inbound work and recovery', () => {
     const row = await lease();
     const draft = await service.prepare(actor(), replyInput(row));
     await service.approve(human(), draft.id);
-    await shortLease(row);
+    await pool.query(
+      "UPDATE copilot_work SET lease_until=clock_timestamp()+interval '1 second' WHERE id=$1",
+      [row.id]
+    );
     provider.mockImplementation(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await new Promise((resolve) => setTimeout(resolve, 1200));
       return 'wamid.synthetic-delayed';
     });
     expect((await service.dispatch(actor(), draft.id)).state).toBe('sent');
@@ -897,8 +900,21 @@ describe.skipIf(!url)('durable inbound work and recovery', () => {
     ).rows[0];
     expect(row.state).toBe('completed');
     expect(row.outcome.type).toBe('native_consumed');
+    await expect(
+      service.claim(actor(), conversationId, sessionId)
+    ).rejects.toMatchObject({ status: 409 });
     expect(await service.claimNext(actor(), sessionId)).toBeNull();
     expect(provider).not.toHaveBeenCalled();
+    await pool.query('DELETE FROM copilot_work WHERE source_id=$1', [id]);
+    expect((await service.reconcileInbound(actor())).inserted).toBe(1);
+    expect(
+      (
+        await pool.query(
+          'SELECT outcome FROM copilot_work WHERE source_id=$1',
+          [id]
+        )
+      ).rows[0].outcome.type
+    ).toBe('native_consumed');
   });
   it('REST repair preserves incomplete-ingress work and requires explicit human resolution', async () => {
     const id = (
@@ -936,12 +952,18 @@ describe.skipIf(!url)('durable inbound work and recovery', () => {
     );
     await service.takeover(human(), conversationId, true);
     expect(await service.claimNext(actor(), sessionId)).toBeNull();
+    await expect(
+      service.claim(actor(), conversationId, sessionId)
+    ).rejects.toMatchObject({ status: 409 });
     inboundId = await insert('Next request');
     await pool.query(
       "INSERT INTO messages(conversation_id,sender_type,content_text,message_id) VALUES($1,'bot','Native automation response',$2)",
       [conversationId, `wamid.${randomUUID()}`]
     );
     expect(await service.claimNext(actor(), sessionId)).toBeNull();
+    await expect(
+      service.claim(actor(), conversationId, sessionId)
+    ).rejects.toMatchObject({ status: 409 });
     expect(
       (
         await pool.query('SELECT state FROM copilot_work WHERE source_id=$1', [

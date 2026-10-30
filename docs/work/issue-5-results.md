@@ -57,7 +57,10 @@ installing directly with `npm ci` resolved it without build/config changes.
 Adding readiness intentionally introduced a second ingestion RPC; two existing
 unread-bump tests initially counted all RPCs and were updated to assert the
 unread operation specifically. New tests verify completion ordering, native
-consumption, failure handling and service-only access. All checks were rerun.
+consumption, failure handling and service-only access. The final handled-source guard also initially rejected four test-only invalidated
+contexts; it was refined to distinguish native/human handling from source
+invalidation. Queue generations remain strictly fenced in either case. All
+checks were rerun.
 Final CI run links, exact tested head and PR state are recorded in Issue #5/#9
 and the implementation PR. GitHub is authoritative for current delivery status.
 

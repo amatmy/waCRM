@@ -37,7 +37,9 @@ consumed by native flows/automation replies/interactive handling is terminal wit
 `outcome.type=native_consumed`, meaning no additional copilot work, not delivery
 confirmation. Other native human/bot responses put work in human review to avoid
 an extra queued answer. Copilot outbox persistence is identified separately.
-Even ordinary claim/reply/CRM APIs reject an incomplete canonical ingress phase.
+Even ordinary claim/reply/CRM APIs reject incomplete or already-handled canonical
+ingress, so native-consumed/human-handled work cannot be reopened through a
+nonqueue tool.
 
 Reconciliation uses this durable completion marker, never elapsed time or a lost
 notification as proof of readiness. Interrupted and pre-migration messages without

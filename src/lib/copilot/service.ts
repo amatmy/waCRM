@@ -189,12 +189,12 @@ export class CopilotService {
       row.copilot_latest_inbound_id &&
       (
         await c.query(
-          'SELECT 1 FROM copilot_work WHERE source_id=$1 AND account_id=$2 AND NOT ready',
+          `SELECT 1 FROM copilot_work WHERE source_id=$1 AND account_id=$2 AND (NOT ready OR state IN ('completed','awaiting_human'))`,
           [row.copilot_latest_inbound_id, actor.accountId]
         )
       ).rows.length
     )
-      throw conflict('Inbound processing has not completed');
+      throw conflict('Inbound processing is incomplete or already handled');
     if (row.copilot_work_id && !allocateWork) {
       if (
         row.copilot_work_token !== workToken ||
