@@ -231,6 +231,8 @@ export function createRemoteServer(cfg: RemoteConfig) {
       const definitions: Array<Record<string, unknown>> = [];
       Object.defineProperty(server, 'registerTool', {
         value: (...args: unknown[]) => {
+          // The remote copilot has no broadcast tools, even read-only status.
+          if (args[0] === 'get_broadcast') return undefined;
           const descriptor = args[1] as {
             title?: string;
             description?: string;

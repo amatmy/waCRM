@@ -141,6 +141,7 @@ test('SDK initialize, read-only discovery and account-scoped synthetic CRM read'
   assert.ok(names.includes('list_conversations'));
   assert.ok(!names.includes('send_message'));
   assert.ok(!names.includes('send_broadcast'));
+  assert.ok(!names.includes('get_broadcast'));
   assert.ok(!names.includes('handoff_to_human'));
   assert.equal(
     (await client.callTool({ name: 'handoff_to_human', arguments: {} }))
@@ -165,6 +166,7 @@ test('write scope exposes guarded handoff only and forwards server-held key, not
   assert.ok(names.includes('handoff_to_human'));
   assert.ok(!names.includes('send_message'));
   assert.ok(!names.includes('send_broadcast'));
+  assert.ok(!names.includes('get_broadcast'));
   const result = await client.callTool({
     name: 'handoff_to_human',
     arguments: {
