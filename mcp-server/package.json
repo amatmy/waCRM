@@ -34,6 +34,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
+    "start:remote": "node dist/remote-entry.js",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && node --test test/*.test.mjs",

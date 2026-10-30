@@ -112,3 +112,10 @@ Logs go to **stderr** — stdout is reserved for the MCP protocol.
 ## License
 
 MIT — same as wacrm.
+
+## Remote ChatGPT MCP (fork)
+
+See [remote MCP setup and limitations](../docs/chatgpt-remote-mcp.md). The
+separate `npm run start:remote` process binds loopback for an HTTPS reverse proxy,
+requires OAuth and a server-held account-scoped key, and defaults to read-only.
+It does not start a human session or local inference runtime.

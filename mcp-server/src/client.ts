@@ -66,6 +66,8 @@ export class WacrmClient {
       res = await fetch(url, {
         method,
         headers,
+        redirect: 'error',
+        signal: AbortSignal.timeout(10000),
         body:
           options.body !== undefined ? JSON.stringify(options.body) : undefined,
       });
@@ -94,14 +96,22 @@ export class WacrmClient {
     if (!res.ok) {
       const envelope = payload as
         { error?: { code?: string; message?: string } } | undefined;
-      const code = envelope?.error?.code ?? 'internal';
+      const rawCode = envelope?.error?.code;
+      const code =
+        typeof rawCode === 'string' && /^[a-z_]{1,64}$/.test(rawCode)
+          ? rawCode
+          : 'internal';
       let message =
         envelope?.error?.message ?? `Request failed with status ${res.status}`;
       if (res.status === 429) {
         const retryAfter = res.headers.get('Retry-After');
         if (retryAfter) message += ` (retry after ${retryAfter}s)`;
       }
-      throw new WacrmApiError(res.status, code, message);
+      throw new WacrmApiError(
+        res.status,
+        code,
+        message.replaceAll(this.apiKey, '[redacted]')
+      );
     }
 
     const envelope = payload as {
