@@ -5,6 +5,7 @@ const h = vi.hoisted(() => ({
   claimNext: vi.fn(),
   inspect: vi.fn(),
   renew: vi.fn(),
+  knowledge: vi.fn(),
   release: vi.fn(),
 }));
 vi.mock('@/lib/auth/api-context', () => ({ requireApiKey: h.auth }));
@@ -15,6 +16,7 @@ vi.mock('@/lib/copilot/work', () => ({
     claimNext = h.claimNext;
     inspect = h.inspect;
     renew = h.renew;
+    knowledge = h.knowledge;
     release = h.release;
   },
 }));
@@ -88,4 +90,32 @@ it('preserves authentication failures and stale-lease conflicts', async () => {
   expect(
     (await POST(request({ action: 'claim', session_id: id }))).status
   ).toBe(409);
+});
+
+it('knowledge context uses only authenticated lease IDs, never caller facts', async () => {
+  h.knowledge.mockResolvedValue({
+    verified_answer: null,
+    reason: 'human_required',
+  });
+  expect(
+    (await POST(request({ action: 'knowledge', work_id: id, work_token: id })))
+      .status
+  ).toBe(200);
+  expect(h.knowledge).toHaveBeenCalledWith(
+    { accountId: 'trusted-account', keyId: 'trusted-key' },
+    id,
+    id
+  );
+  expect(
+    (
+      await POST(
+        request({
+          action: 'knowledge',
+          work_id: id,
+          work_token: id,
+          verified_answer: { text: 'forged' },
+        })
+      )
+    ).status
+  ).toBe(400);
 });

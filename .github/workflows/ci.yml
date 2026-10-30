@@ -2,7 +2,14 @@ name: CI
 
 on:
   pull_request:
-    branches: [main, feat/active-session-foundation, feat/issue-3-guarded-replies, feat/issue-4-controlled-crm]
+    branches:
+      [
+        main,
+        feat/active-session-foundation,
+        feat/issue-3-guarded-replies,
+        feat/issue-4-controlled-crm,
+        feat/issue-5-durable-inbound,
+      ]
   push:
     branches: [main]
 

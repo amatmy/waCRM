@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { ApiError, forbidden, badRequest } from '@/lib/api/v1/respond';
 import { transaction } from './db';
+import { normalizeQuestion, requiresHuman } from './policy';
 import { CopilotService, type KeyActor, type HumanActor } from './service';
 
 const conflict = (s: string) => new ApiError('bad_request', s, 409);
@@ -280,6 +281,43 @@ export class CopilotWorkService extends CopilotService {
     if (row.state !== 'leased' || row.lease_token !== token)
       throw conflict('Work lease changed');
     return { row, gate };
+  }
+  async knowledge(actor: KeyActor, workId: string, token: string) {
+    return transaction(this.pool, async (c) => {
+      const { row, gate } = await this.owned(c, actor, workId, token);
+      const message = (
+        await c.query(
+          'SELECT content_type,content_text FROM messages WHERE id=$1 AND conversation_id=$2',
+          [row.source_id, row.conversation_id]
+        )
+      ).rows[0];
+      const question =
+        typeof message?.content_text === 'string' ? message.content_text : '';
+      let answer = null;
+      const risky = requiresHuman(question) || message?.content_type !== 'text';
+      if (!risky && question) {
+        const found = (
+          await c.query(
+            `SELECT id,answer_text AS text,source_reference,expires_at FROM copilot_answers
+          WHERE account_id=$1 AND query_normalized=$2 AND enabled AND expires_at>clock_timestamp() FOR SHARE`,
+            [actor.accountId, normalizeQuestion(question)]
+          )
+        ).rows[0];
+        if (found && !requiresHuman(found.text)) answer = found;
+      }
+      await this.clock(c, actor, row.session_id, gate.operator);
+      await this.workClock(c, actor, workId, token);
+      return {
+        policy_mode: gate.mode,
+        policy_revision: gate.policyRevision,
+        verified_answer: answer,
+        reason: answer
+          ? 'verified_exact_match'
+          : risky
+            ? 'human_required'
+            : 'no_verified_answer',
+      };
+    });
   }
   async renew(actor: KeyActor, workId: string, token: string) {
     return transaction(this.pool, async (c) => {

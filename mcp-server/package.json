@@ -29,11 +29,13 @@
   },
   "files": [
     "dist",
+    "runtime",
     "README.md"
   ],
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
+    "runtime:once": "node runtime/cli.mjs --once",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && node --test test/*.test.mjs",
