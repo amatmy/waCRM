@@ -6,6 +6,7 @@ const h = vi.hoisted(() => ({
   setPolicy: vi.fn(),
   bindKey: vi.fn(),
   reconcile: vi.fn(),
+  verifyAnswer: vi.fn(),
 }));
 vi.mock('@/lib/auth/account', () => ({
   requireRole: h.auth,
@@ -24,6 +25,11 @@ vi.mock('@/lib/copilot/service', () => ({
     setPolicy = h.setPolicy;
     bindKey = h.bindKey;
     reconcile = h.reconcile;
+  },
+}));
+vi.mock('@/lib/copilot/crm', () => ({
+  CopilotCrmService: class {
+    verifyBusinessAnswer = h.verifyAnswer;
   },
 }));
 import { POST } from './route';
@@ -65,4 +71,33 @@ it('rejects unauthenticated approval', async () => {
     401
   );
   expect(h.approve).not.toHaveBeenCalled();
+});
+
+it('only the human control surface can select hybrid policy or curate verified answers', async () => {
+  expect(
+    (await POST(req({ action: 'policy', enabled: true, mode: 'hybrid' })))
+      .status
+  ).toBe(200);
+  expect(h.setPolicy).toHaveBeenCalledWith(
+    { accountId: 'human-account', userId: 'human-id' },
+    true,
+    'hybrid'
+  );
+  const answer = {
+    question: 'Hours?',
+    answer: '09:00',
+    source_reference: 'Approved handbook',
+    expires_at: '2027-01-01T00:00:00Z',
+  };
+  expect((await POST(req({ action: 'verify_answer', answer }))).status).toBe(
+    200
+  );
+  expect(h.verifyAnswer).toHaveBeenCalledWith(
+    { accountId: 'human-account', userId: 'human-id' },
+    answer
+  );
+  expect(
+    (await POST(req({ action: 'policy', enabled: true, mode: 'autonomous' })))
+      .status
+  ).toBe(400);
 });

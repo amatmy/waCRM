@@ -35,13 +35,9 @@ export async function POST(request: Request) {
         data = await service.dispatch(actor, uuid(body, 'outbox_id'));
         break;
       case 'handoff':
-        data = await service.handoff(
-          actor,
-          uuid(body, 'conversation_id'),
-          revision(body),
-          text(body, 'summary', 2000)
+        throw badRequest(
+          'Use /api/v1/copilot/crm with session, revision and idempotency key for audited handoff'
         );
-        break;
       default:
         throw badRequest('Unknown copilot action');
     }

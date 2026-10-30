@@ -119,3 +119,11 @@ and chosen-runtime acceptance remain #8; deployment is not part of this PR.
 Keep upstream native AI settings unconfigured: those paths use provider APIs
 ; native automatic provider dispatch is disabled in this fork. This foundation introduces no model
 dependency, key, provider call, scheduler, or listener.
+
+
+## Controlled CRM and hybrid policy
+
+See [the Issue #4 contract](copilot-crm.md) for the `copilot:crm` scope,
+audited active-session CRM actions, new handoff inputs and explicit verified-answer
+hybrid policy. The old `/api/v1/copilot/actions` handoff action is retired; use
+the audited `/api/v1/copilot/crm` action. Assistance stays disabled by default.

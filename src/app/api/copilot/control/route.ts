@@ -12,6 +12,7 @@ import {
   RATE_LIMITS,
 } from '@/lib/rate-limit';
 import { copilotPool } from '@/lib/copilot/db';
+import { CopilotCrmService } from '@/lib/copilot/crm';
 import { CopilotService } from '@/lib/copilot/service';
 import { object, uuid, text } from '@/lib/copilot/input';
 export const runtime = 'nodejs';
@@ -32,7 +33,22 @@ export async function POST(request: Request) {
       case 'policy':
         if (typeof body.enabled !== 'boolean')
           throw badRequest('enabled must be boolean');
-        data = await service.setPolicy(actor, body.enabled);
+        if (
+          body.mode !== undefined &&
+          body.mode !== 'human_approval' &&
+          body.mode !== 'hybrid'
+        )
+          throw badRequest('Invalid policy mode');
+        data =
+          body.mode === undefined
+            ? await service.setPolicy(actor, body.enabled)
+            : await service.setPolicy(actor, body.enabled, body.mode);
+        break;
+      case 'verify_answer':
+        data = await new CopilotCrmService(copilotPool()).verifyBusinessAnswer(
+          actor,
+          body.answer
+        );
         break;
       case 'bind':
         data = await service.bindKey(

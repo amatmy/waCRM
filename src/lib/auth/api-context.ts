@@ -103,8 +103,22 @@ export async function requireApiKey(
     throw forbidden(`This API key is missing the '${scope}' scope`);
   }
 
-  if ((row.copilot_bound || row.scopes.includes('copilot:act')) && scope && !['copilot:act','messages:read','contacts:read','conversations:read'].includes(scope)) {
-    throw forbidden('Copilot credentials cannot use legacy write or broadcast capabilities');
+  if (
+    (row.copilot_bound ||
+      row.scopes.includes('copilot:act') ||
+      row.scopes.includes('copilot:crm')) &&
+    scope &&
+    ![
+      'copilot:act',
+      'copilot:crm',
+      'messages:read',
+      'contacts:read',
+      'conversations:read',
+    ].includes(scope)
+  ) {
+    throw forbidden(
+      'Copilot credentials cannot use legacy write or broadcast capabilities'
+    );
   }
 
   touchLastUsed(row.id);

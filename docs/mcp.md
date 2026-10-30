@@ -61,3 +61,11 @@ scopes. Give an assistant a read-only key and read-only config and it
 physically cannot send anything. See the
 [server README](../mcp-server/README.md) for the full tool list and
 safety model.
+
+
+## Controlled CRM and hybrid policy
+
+See [the Issue #4 contract](copilot-crm.md) for the `copilot:crm` scope,
+audited active-session CRM actions, new handoff inputs and explicit verified-answer
+hybrid policy. The old `/api/v1/copilot/actions` handoff action is retired; use
+the audited `/api/v1/copilot/crm` action. Assistance stays disabled by default.
