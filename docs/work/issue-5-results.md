@@ -1,5 +1,7 @@
 # Issue #5 — durable inbound work and recovery results
 
+PR: https://github.com/amatmy/waCRM/pull/13 (draft/open/unmerged).
+
 Source of truth: https://github.com/amatmy/waCRM/issues/5 and roadmap #9.
 Branch `feat/issue-5-durable-inbound` is based on PR #12 head
 `d0b2873b72059cfeaeda7df2afb213b27ebf1c64`; #12 depends on unmerged #11/#10.

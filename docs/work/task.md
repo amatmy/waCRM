@@ -10,7 +10,8 @@ decisions, blockers and verified outcomes.
 ## Verify dependencies first
 
 PRs #10 (sessions), #11 (guarded replies), #12 (controlled CRM/hybrid) and the
-Issue #5 PR on `feat/issue-5-durable-inbound` form a review stack. Base of #5 is
+Issue #5 PR #13 (https://github.com/amatmy/waCRM/pull/13) on
+`feat/issue-5-durable-inbound` form a review stack. Base of #5 is
 PR #12 head `d0b2873b72059cfeaeda7df2afb213b27ebf1c64` at implementation start.
 Read the live PR state and exact heads; all were unmerged during #5. Do not infer
 merge from green checks, and do not merge/deploy without separate user approval.
