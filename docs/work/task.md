@@ -24,3 +24,11 @@ Run relevant app/MCP tests, typecheck, lint, build, SQL/RLS and migration checks
 
 ## Deliverable
 Open a reviewable PR referencing #15; update #15 and #9 with exact verified results, supported/unsupported ChatGPT capabilities, blockers and next action. STOP after #15.
+
+## Mandatory documentation and reporting gate
+
+This task is **not complete** until Work documents actual work and results in GitHub. Follow the standing policy in `AGENTS.md`:
+- Update Issue #15 and roadmap #9 with implementation decisions, changed components, exact tests/commands and pass/fail/skip counts, CI URLs, failures/fixes, security findings, unresolved limitations, and the next action.
+- Create or update `docs/work/issue-15-results.md` with reproducible detailed evidence (or explicitly document a blocker if no implementation was possible), and link it in the PR and issue.
+- Update `docs/work/task.md` with the next handoff **without assuming it is authorized to run**.
+- In Work's final response provide GitHub links, results, blockers and one specific next action. Do not mark Issue #15 complete or say acceptance passed without verifiable evidence.
