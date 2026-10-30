@@ -20,7 +20,7 @@ type Params = { params: Promise<{ conversationId: string }> }
  *                     fires the `on_conversation_assigned` trigger.
  *   - paused: false → hand the thread back to the bot: clear the pause,
  *                     reset the per-conversation reply count so it gets
- *                     fresh slots, and clear the handoff note. If the
+ *                     fresh slots, preserving the handoff note. If the
  *                     caller currently owns the thread, unassign it too so
  *                     the bot isn't blocked by the "human owns this" gate.
  *
@@ -70,8 +70,8 @@ export async function POST(request: Request, { params }: Params) {
     if (paused) {
       if (assignToMe) update.assigned_agent_id = userId
     } else {
-      // Resuming hands the thread *back to the bot*. Clear the pause and
-      // the handoff note, and — crucially — release ANY assignment, not
+      // Explicit release clears pause/assignment while preserving the summary.
+      // Release ANY assignment, not
       // just the caller's own: the auto-reply eligibility gate stands
       // down whenever a human is assigned, so leaving a stale assignee
       // (e.g. the agent a prior handoff routed to) would silently keep
@@ -83,7 +83,7 @@ export async function POST(request: Request, { params }: Params) {
       // can't be used to bypass the per-conversation cap at scale — it's
       // a human choosing to re-engage the assistant.
       update.ai_reply_count = 0
-      update.ai_handoff_summary = null
+      // Keep the handoff summary as customer-service history.
     }
 
     const { error: upErr } = await supabase

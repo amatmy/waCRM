@@ -16,6 +16,11 @@ const tablesWithoutDomainData = new Set([
   "pending_message_statuses",
   // Presence leases contain no customer data and must not prevent joining a team.
   "copilot_sessions",
+  // Permission/binding metadata can be reset on joining. Outbox customer data
+  // is already covered by the mandatory conversation/account-data guard.
+  "copilot_keys",
+  "copilot_policies",
+  "copilot_outbox",
 ]);
 
 function accountScopedTables(): Set<string> {

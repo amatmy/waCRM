@@ -55,6 +55,7 @@
     "next": "16.3.8",
     "next-intl": "^4.14.9",
     "opus-recorder": "^8.0.5",
+    "pg": "8.23.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "recharts": "^3.10.1",
@@ -66,6 +67,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^26",
+    "@types/pg": "8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
