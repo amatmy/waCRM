@@ -173,7 +173,6 @@ describe.skipIf(!url)('controlled CRM and hybrid policy', () => {
     return service.prepare(actor(), {
       conversation_id: conversationId,
       session_id: sessionId,
-      inbound_id: inboundId,
       ownership_revision: claim.revision,
       inbound_id: inboundId,
       idempotency_key: randomUUID(),
@@ -297,6 +296,55 @@ describe.skipIf(!url)('controlled CRM and hybrid policy', () => {
       ).rows[0].n
     ).toBe(0);
     expect(provider).not.toHaveBeenCalled();
+  });
+  it('a valid foreign-account operator/key/session cannot mutate or inspect this tenant', async () => {
+    const input = await action('note', { note: 'Tenant A note' });
+    const row = await service.perform(actor(), input);
+    const foreignHuman = { accountId: otherAccountId, userId: otherUserId };
+    const foreignKey = (
+      await pool.query(
+        "INSERT INTO api_keys(account_id,created_by,name,key_prefix,key_hash,scopes) VALUES($1,$2,'foreign','fixture',$3,ARRAY['copilot:act','copilot:crm']) RETURNING id",
+        [otherAccountId, otherUserId, randomUUID()]
+      )
+    ).rows[0].id;
+    await service.bindKey(foreignHuman, foreignKey);
+    await service.setPolicy(foreignHuman, true);
+    const c = await pool.connect();
+    let foreignSession: string;
+    try {
+      await c.query('BEGIN');
+      await c.query("SELECT set_config('request.jwt.claim.sub',$1,true)", [
+        otherUserId,
+      ]);
+      await c.query('SET LOCAL ROLE authenticated');
+      foreignSession = (
+        await c.query(
+          "SELECT session_id FROM transition_copilot_session('start')"
+        )
+      ).rows[0].session_id;
+      await c.query('COMMIT');
+    } finally {
+      c.release();
+    }
+    const foreignActor = { accountId: otherAccountId, keyId: foreignKey };
+    await expect(
+      service.perform(foreignActor, {
+        ...input,
+        session_id: foreignSession!,
+        idempotency_key: randomUUID(),
+      })
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(service.outcome(foreignActor, row.id)).rejects.toMatchObject({
+      status: 404,
+    });
+    expect(
+      (
+        await pool.query(
+          'SELECT count(*)::int n FROM contact_notes WHERE account_id=$1',
+          [accountId]
+        )
+      ).rows[0].n
+    ).toBe(1);
   });
   it('handoff atomically assigns the bound human, retains history, cancels replies and audits the result', async () => {
     const draft = await approved();
@@ -561,7 +609,6 @@ describe.skipIf(!url)('controlled CRM and hybrid policy', () => {
       const row = await service.prepare(actor(), {
         conversation_id: conversationId,
         session_id: sessionId,
-        inbound_id: inboundId,
         ownership_revision: claim.revision,
         inbound_id: inboundId,
         idempotency_key: randomUUID(),
