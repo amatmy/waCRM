@@ -2,7 +2,7 @@ import { requireApiKey } from '@/lib/auth/api-context';
 import { ok, toApiErrorResponse } from '@/lib/api/v1/respond';
 import { copilotPool } from '@/lib/copilot/db';
 import { CopilotCrmService, crmInput } from '@/lib/copilot/crm';
-import { object, uuid, revision } from '@/lib/copilot/input';
+import { object, uuid, revision, optionalUuid } from '@/lib/copilot/input';
 export const runtime = 'nodejs';
 export async function POST(request: Request) {
   try {
@@ -17,7 +17,8 @@ export async function POST(request: Request) {
               actor,
               uuid(body, 'conversation_id'),
               uuid(body, 'session_id'),
-              revision(body)
+              revision(body),
+              optionalUuid(body, 'work_token')
             )
           : await service.perform(actor, crmInput(body));
     const response = ok(data);

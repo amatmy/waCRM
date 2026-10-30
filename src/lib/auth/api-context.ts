@@ -106,11 +106,13 @@ export async function requireApiKey(
   if (
     (row.copilot_bound ||
       row.scopes.includes('copilot:act') ||
-      row.scopes.includes('copilot:crm')) &&
+      row.scopes.includes('copilot:crm') ||
+      row.scopes.includes('copilot:work')) &&
     scope &&
     ![
       'copilot:act',
       'copilot:crm',
+      'copilot:work',
       'messages:read',
       'contacts:read',
       'conversations:read',

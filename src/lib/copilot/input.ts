@@ -29,3 +29,10 @@ export function revision(body: Record<string, unknown>): string {
   if (!/^\d+$/.test(value)) throw badRequest('Invalid ownership_revision');
   return value;
 }
+
+export function optionalUuid(
+  body: Record<string, unknown>,
+  key: string
+): string | undefined {
+  return body[key] === undefined ? undefined : uuid(body, key);
+}

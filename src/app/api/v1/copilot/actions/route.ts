@@ -2,7 +2,13 @@ import { requireApiKey } from '@/lib/auth/api-context';
 import { badRequest, ok, toApiErrorResponse } from '@/lib/api/v1/respond';
 import { copilotPool } from '@/lib/copilot/db';
 import { CopilotService } from '@/lib/copilot/service';
-import { object, uuid, text, revision } from '@/lib/copilot/input';
+import {
+  object,
+  uuid,
+  text,
+  revision,
+  optionalUuid,
+} from '@/lib/copilot/input';
 export const runtime = 'nodejs';
 export async function POST(request: Request) {
   try {
@@ -26,6 +32,7 @@ export async function POST(request: Request) {
           inbound_id: uuid(body, 'inbound_id'),
           idempotency_key: text(body, 'idempotency_key', 128),
           text: text(body, 'text'),
+          work_token: optionalUuid(body, 'work_token'),
         });
         break;
       case 'inspect':

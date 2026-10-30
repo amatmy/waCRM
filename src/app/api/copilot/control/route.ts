@@ -12,6 +12,7 @@ import {
   RATE_LIMITS,
 } from '@/lib/rate-limit';
 import { copilotPool } from '@/lib/copilot/db';
+import { CopilotWorkService } from '@/lib/copilot/work';
 import { CopilotCrmService } from '@/lib/copilot/crm';
 import { CopilotService } from '@/lib/copilot/service';
 import { object, uuid, text } from '@/lib/copilot/input';
@@ -43,6 +44,13 @@ export async function POST(request: Request) {
           body.mode === undefined
             ? await service.setPolicy(actor, body.enabled)
             : await service.setPolicy(actor, body.enabled, body.mode);
+        break;
+      case 'resolve_work':
+        data = await new CopilotWorkService(copilotPool()).resolveHuman(
+          actor,
+          uuid(body, 'work_id'),
+          text(body, 'summary', 2000)
+        );
         break;
       case 'verify_answer':
         data = await new CopilotCrmService(copilotPool()).verifyBusinessAnswer(

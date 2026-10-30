@@ -113,7 +113,7 @@ describe.skipIf(!url)('controlled CRM and hybrid policy', () => {
     ).rows[0].id;
     inboundId = (
       await pool.query(
-        "INSERT INTO messages(conversation_id,sender_type,content_text,message_id) VALUES($1,'customer','Synthetic request',$2) RETURNING id",
+        "INSERT INTO messages(conversation_id,sender_type,content_text,message_id,copilot_ingress_completed) VALUES($1,'customer','Synthetic request',$2,true) RETURNING id",
         [conversationId, `wamid.inbound.${randomUUID()}`]
       )
     ).rows[0].id;
@@ -368,7 +368,7 @@ describe.skipIf(!url)('controlled CRM and hybrid policy', () => {
     await service.takeover(human(), conversationId, true);
     inboundId = (
       await pool.query(
-        "INSERT INTO messages(conversation_id,sender_type,content_text,message_id) VALUES($1,'customer','New synthetic request',$2) RETURNING id",
+        "INSERT INTO messages(conversation_id,sender_type,content_text,message_id,copilot_ingress_completed) VALUES($1,'customer','New synthetic request',$2,true) RETURNING id",
         [conversationId, `wamid.${randomUUID()}`]
       )
     ).rows[0].id;

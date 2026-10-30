@@ -328,3 +328,100 @@ test('guarded copilot writes expose no raw send, approval or activation tool', a
     )
   );
 });
+
+test('durable work tools preserve capabilities, call controlled REST and cannot expose human resolution', async (t) => {
+  const calls = [];
+  let denied = false;
+  const http = createServer(async (req, res) => {
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    calls.push({ path: req.url, body: JSON.parse(body) });
+    res.setHeader('Content-Type', 'application/json');
+    if (denied)
+      res
+        .writeHead(403)
+        .end(
+          JSON.stringify({
+            error: { code: 'forbidden', message: 'Missing copilot:work' },
+          })
+        );
+    else
+      res.end(
+        JSON.stringify({
+          data: { id: operator, state: 'leased', lease_token: operator },
+        })
+      );
+  });
+  await new Promise((resolve) => http.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => http.close(resolve)));
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: ['dist/index.js'],
+    stderr: 'pipe',
+    env: {
+      ...process.env,
+      ...config,
+      WACRM_ENABLE_WRITES: 'true',
+      WACRM_BASE_URL: `http://127.0.0.1:${http.address().port}`,
+    },
+  });
+  const client = new Client({ name: 'durable-work-fixture', version: '1.0.0' });
+  await client.connect(transport);
+  t.after(() => client.close());
+  const names = (await client.listTools()).tools.map((x) => x.name);
+  for (const name of [
+    'reconcile_inbound_work',
+    'claim_next_inbound_work',
+    'get_inbound_work',
+    'renew_inbound_work',
+    'release_inbound_work',
+    'settle_inbound_work',
+  ])
+    assert.ok(names.includes(name));
+  for (const name of [
+    'resolve_work',
+    'start_session',
+    'approve_reply',
+    'send_message',
+    'send_broadcast',
+  ])
+    assert.ok(!names.includes(name));
+  for (const [name, args] of [
+    ['reconcile_inbound_work', {}],
+    ['claim_next_inbound_work', { session_id: operator }],
+    ['get_inbound_work', { work_id: operator }],
+    ['renew_inbound_work', { work_id: operator, work_token: operator }],
+    ['release_inbound_work', { work_id: operator, work_token: operator }],
+    ['settle_inbound_work', { work_id: operator, work_token: operator }],
+  ])
+    assert.ok(!(await client.callTool({ name, arguments: args })).isError);
+  assert.deepEqual(
+    calls.map((x) => x.body.action),
+    ['reconcile', 'claim', 'inspect', 'renew', 'release', 'settle']
+  );
+  assert.ok(calls.every((x) => x.path === '/api/v1/copilot/work'));
+  await client.callTool({
+    name: 'prepare_authorized_reply',
+    arguments: {
+      conversation_id: operator,
+      session_id: operator,
+      inbound_id: operator,
+      ownership_revision: '2',
+      idempotency_key: 'work-fixture',
+      text: 'Synthetic work reply',
+      work_token: operator,
+    },
+  });
+  assert.equal(calls.at(-1).body.work_token, operator);
+  assert.equal(calls.at(-1).path, '/api/v1/copilot/actions');
+  denied = true;
+  assert.equal(
+    (
+      await client.callTool({
+        name: 'claim_next_inbound_work',
+        arguments: { session_id: operator },
+      })
+    ).isError,
+    true
+  );
+});

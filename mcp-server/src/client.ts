@@ -131,6 +131,10 @@ export class WacrmClient {
     });
   }
 
+  copilotWork(body: unknown): Promise<{ data: unknown }> {
+    return this.request('POST', '/copilot/work', { body });
+  }
+
   copilotCrm(body: unknown): Promise<{ data: unknown }> {
     return this.request('POST', '/copilot/crm', { body });
   }

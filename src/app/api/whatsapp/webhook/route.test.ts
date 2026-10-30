@@ -22,6 +22,7 @@ const h = vi.hoisted(() => ({
     afterCallbacks: [] as (() => Promise<void> | void)[],
     automationStarted: 0,
     automationCompleted: 0,
+    ingressError: false,
     /** whatsapp_config.mirror_inbound_media for the matched row (#466). */
     mirrorInboundMedia: true as boolean | undefined,
     /** Objects the inbound-media mirror pushed into chat-media. */
@@ -211,7 +212,7 @@ vi.mock('@supabase/supabase-js', () => ({
     },
     rpc: (name: string, args: Record<string, unknown>) => {
       h.state.rpcCalls.push({ name, args })
-      return Promise.resolve({ data: null, error: null })
+      return Promise.resolve({ data: null, error: name === 'copilot_finalize_ingress' && h.state.ingressError ? {message:'synthetic finalization failure'} : null })
     },
     // Service-role Storage, used by the inbound-media mirror (#466).
     storage: {
@@ -372,6 +373,7 @@ beforeEach(() => {
   h.state.afterCallbacks = []
   h.state.automationStarted = 0
   h.state.automationCompleted = 0
+  h.state.ingressError = false
   h.state.mirrorInboundMedia = true
   h.state.storageUploads = []
   h.state.storageUploadError = null
@@ -423,7 +425,7 @@ describe('inbound webhook: idempotent insert (#367)', () => {
       ignoreDuplicates: true,
     })
     // Downstream side effects ran exactly once.
-    expect(h.state.rpcCalls).toHaveLength(1)
+    expect(h.state.rpcCalls.filter(call => call.name === 'bump_conversation_on_inbound')).toHaveLength(1)
     expect(h.dispatchInboundToFlows).toHaveBeenCalledTimes(1)
     expect(h.dispatchWebhookEvent).toHaveBeenCalledTimes(1)
   })
@@ -448,7 +450,7 @@ describe('inbound webhook: atomic unread bump (#369)', () => {
   it('increments unread through the DB-side RPC, not a read-modify-write', async () => {
     await runWebhook()
 
-    expect(h.state.rpcCalls).toHaveLength(1)
+    expect(h.state.rpcCalls.filter(call => call.name === 'bump_conversation_on_inbound')).toHaveLength(1)
     expect(h.state.rpcCalls[0]).toMatchObject({
       name: 'bump_conversation_on_inbound',
       args: { p_conversation_id: 'conv-1' },
@@ -1171,5 +1173,34 @@ describe('inbound webhook: first_inbound_message fires once', () => {
     h.state.messageUpsertResult = []
     await runWebhook()
     expect(h.state.firstInboundClaims).toBe(0)
+  })
+})
+
+
+describe('copilot ingress readiness', () => {
+  it('records readiness after awaited automations and before best-effort fan-out', async () => {
+    h.dispatchWebhookEvent.mockImplementation(async (_db, _account, event) => {
+      if (event === 'message.received') {
+        expect(h.state.automationCompleted).toBe(h.state.automationStarted)
+        expect(h.state.rpcCalls).toContainEqual({name:'copilot_finalize_ingress',args:{p_source_id:'msg-1',p_consumed:false}})
+      }
+    })
+    await runWebhook()
+    expect(h.state.rpcCalls.filter(call => call.name === 'copilot_finalize_ingress')).toHaveLength(1)
+  })
+  it('records native consumption without offering another copilot reply', async () => {
+    h.dispatchInboundToFlows.mockResolvedValue({consumed:true})
+    await runWebhook()
+    expect(h.state.rpcCalls).toContainEqual({name:'copilot_finalize_ingress',args:{p_source_id:'msg-1',p_consumed:true}})
+  })
+  it('logs failed finalization without inventing readiness or replaying native processing', async () => {
+    h.state.ingressError = true
+    const error=vi.spyOn(console,'error').mockImplementation(()=>{})
+    try {
+      await runWebhook()
+      expect(error).toHaveBeenCalledWith('[webhook] copilot ingress completion failed:',expect.any(Object))
+      expect(h.dispatchInboundToFlows).toHaveBeenCalledTimes(1)
+      expect(h.dispatchWebhookEvent).toHaveBeenCalledTimes(1)
+    } finally { error.mockRestore() }
   })
 })

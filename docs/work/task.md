@@ -1,76 +1,47 @@
-# Next Work Task — Issue #5: Durable inbound queue and active-session recovery
+# Work Task — Issue #15: ChatGPT ↔ waCRM remote MCP (NO local AI)
 
-## Source of truth and authorization
+## Authoritative correction
+The user explicitly wants **ChatGPT through their existing subscription, connected to waCRM over MCP**. Do not implement or depend on Qwen, llama.cpp, Ollama, any local model, or paid AI inference APIs. Issue #15 supersedes the local-inference direction of #6/PR #14; do not merge #14 as the intended solution.
 
-Repository: `amatmy/waCRM`. Read `AGENTS.md`, roadmap
-https://github.com/amatmy/waCRM/issues/9, Issue #5
-https://github.com/amatmy/waCRM/issues/5, and their current comments before work.
-**User authorization:** Proceed with Issue #5 in the next manually initiated Work run. Scope is strictly Issue #5; the previous Issue #4 run is complete. Do not merge or deploy without separate approval.
-GitHub Issues/PRs own decisions, delivery status and blockers.
+Source of truth: https://github.com/amatmy/waCRM/issues/15 and roadmap https://github.com/amatmy/waCRM/issues/9. Read AGENTS.md and existing MCP, CRM and security documentation. Record decisions, blockers, acceptance and results in GitHub Issues/PRs.
 
-## Dependencies to verify before coding
+## Before work
+- Inspect PRs #10–#14 and actual current heads/merge status. #10→#11→#12→#13 form the safety/CRM/queue stack. PR #14 contains the rejected local-inference approach.
+- Work on a separate reviewable branch based on the appropriate **non-local-inference** dependency head (normally PR #13 if still unmerged). Do not merge/deploy any PR without approval.
+- Review ChatGPT's currently supported custom MCP app/connector transport, authentication, write tool permissions and plan limitations using official documentation; do not assume consumer ChatGPT can perform writes or run continuously.
 
-- PR #10: https://github.com/amatmy/waCRM/pull/10 — human sessions, head
-  `51073f036860c04d5ddd19a2be81348407ed0350` at the Issue #4 review.
-- PR #11: https://github.com/amatmy/waCRM/pull/11 — guarded replies/outbox, head
-  `ea9057373c18745a8368c64ce61213ef4c15a5a5` at the Issue #4 review; based on #10.
-- PR #12: https://github.com/amatmy/waCRM/pull/12 — Issue #4 branch
-  `feat/issue-4-controlled-crm`, based on #11. Consult this PR and
-  `docs/work/issue-4-results.md` for exact tested head and CI evidence.
-- All remain unmerged unless GitHub now proves otherwise. Do not infer merge
-  from green checks or merge any dependency without explicit user approval.
-  Create an isolated branch from the correct dependency head and document the
-  base on Issue #5. Preserve upstream MIT attribution/history.
+## Implementation
+1. Provide an authenticated, remote HTTPS MCP interface that ChatGPT can connect to, with supported transport and tool schemas. No open unauthenticated write endpoints.
+2. Expose safe read tools for contacts, inbox, conversation messages, assignments and CRM context; expose guarded write tools for replies, notes, status, deals, assignment and handoff only if the selected ChatGPT client supports them.
+3. Preserve all server-side guards: tenant/account/operator authorization, active human session, ownership/revision, latest inbound, idempotency/outbox, WhatsApp eligibility, verified business knowledge and human takeover. Disable broadcast and raw-send bypass.
+4. Make the setup practical: documented public HTTPS URL, authentication/configuration, and connection instructions for ChatGPT. Do not use localhost as the end-user MCP endpoint.
+5. Demonstrate MCP protocol reads/writes with isolated fixtures and, if authorized and technically supported, verify actual ChatGPT connection. Explicitly distinguish MCP fixture success from actual ChatGPT acceptance.
+6. Do not claim ChatGPT is an always-on webhook listener. For human-active operation, document what can be done interactively and which autonomous capabilities are not supported without an independently callable runtime.
+7. Remove or isolate local-model integration from the product plan. Update roadmap and next-task brief; align Issue #7 UI work with ChatGPT MCP, not Qwen.
 
-The Issue #4 dependency audit reports 13 inherited application advisories
-(including critical Next.js) and 7 MCP advisories. They remain release blockers
-tracked with the audit evidence in Issues #1/#4/#9; no dependency upgrades were
-performed during #4. Do not treat green tests as security or deployment approval.
+## Tests and boundaries
+Run relevant app/MCP tests, typecheck, lint, build, SQL/RLS and migration checks; document commands, counts, CI, failures and security advisories. No paid AI API, no local model, no real WhatsApp sends, no production deployment or merges. No contact with third parties. Keep upstream attribution/history. Do not claim live acceptance from synthetic tests.
 
-Read `docs/copilot.md`, `docs/copilot-dispatch.md`, `docs/copilot-crm.md`, the
-actual ingress/webhook and event-delivery code, and all copilot migrations/tests.
-Issue #4 fences status/contact/account edits and rechecks dispatch eligibility
-after contact/config lock waits; retain these fixes when rebasing the stack.
+## Deliverable
+Open a reviewable PR referencing #15; update #15 and #9 with exact verified results, supported/unsupported ChatGPT capabilities, blockers and next action. STOP after #15.
 
-## Authorized scope when the user starts #5
+## Mandatory documentation and reporting gate
 
-Persist inbound work in the CRM database, deduplicate provider message IDs,
-claim work with bounded worker leases, preserve pending work during pause, and
-recover after crashes/restarts. Existing upstream outbound webhook deliveries
-are best-effort single attempts: reconcile account-scoped REST reads so missed
-notifications do not lose inbound work. A ChatGPT session is not a webhook
-listener. No independent scheduled AI shifts or 24/7 requirement.
+This task is **not complete** until Work documents actual work and results in GitHub. Follow the standing policy in `AGENTS.md`:
+- Update Issue #15 and roadmap #9 with implementation decisions, changed components, exact tests/commands and pass/fail/skip counts, CI URLs, failures/fixes, security findings, unresolved limitations, and the next action.
+- Create or update `docs/work/issue-15-results.md` with reproducible detailed evidence (or explicitly document a blocker if no implementation was possible), and link it in the PR and issue.
+- Update `docs/work/task.md` with the next handoff **without assuming it is authorized to run**.
+- In Work's final response provide GitHub links, results, blockers and one specific next action. Do not mark Issue #15 complete or say acceptance passed without verifiable evidence.
 
-Every processing/dispatch step must enforce the current human session,
-operator/key membership, conversation ownership revision and current inbound.
-Paused arrivals remain pending. Never replay stale results into a human-owned
-conversation or claim work through a replaced human session. Keep the existing
-outbox and action log as authoritative outcomes; queue leases must not become a
-second send-authorization system. Preserve audit history and handoff summaries.
+## Resume directive after partial Issue #15 Work run (2026-10-30)
 
-Unknown/dispatching provider attempts must be reconciled, never blindly retried
-or recreated under a fresh key. One outbox entry per inbound currently prevents
-replacement drafts after policy/context changes. Define a reviewable human-only
-resolution contract if needed; do not silently remove the duplicate-send fence.
-Reply authorization is either exact human approval or the server-verified,
-unexpired exact-match business answer in explicit hybrid mode. Policy/rule edits
-invalidate old unsent authorizations. AI cannot curate business knowledge.
+Work already completed an **audit only** and recorded the findings at https://github.com/amatmy/waCRM/issues/15#issuecomment-6520386942. Do not repeat that audit as the sole deliverable and do not stop merely because OAuth or account permissions require further confirmation. Execute the feasible implementation and testing on this run.
 
-## Acceptance and evidence
+- The prior `feat/issue-15-chatgpt-mcp` branch was **local only and not pushed to GitHub**. Start from the actual updated remote `feat/issue-5-durable-inbound` head (or reconcile any existing local work); create and PUSH a reviewable Issue #15 branch. Verify ancestry and exclude PR #14's local-inference code. Never overwrite useful uncommitted work.
+- The existing MCP server uses **stdio and a configured waCRM API key**. Build a ChatGPT-compatible **remote Streamable HTTP MCP transport** (subject to current official support), separating MCP client OAuth authorization from the server-side waCRM credential. ChatGPT must not be expected to supply a user-entered waCRM API key. Implement/test appropriate OAuth resource and authorization-server discovery, audience/issuer/scope/expiry checks, account isolation, and secret handling, or use a maintained supported authentication framework. Do not invent a weak shared-token workaround. Document any strictly external setup needed to finish actual OAuth enrollment.
+- Build and test the remote MCP `initialize`, discovery and allowed read tools using an MCP SDK client over HTTP. Connect guarded write tools only when server authorization is sound; deny unsafe legacy send/broadcast tools. Use isolated local fixtures, real-local Postgres if needed, and no real WhatsApp contacts.
+- Prove HTTP authentication denies missing, expired, wrong-audience, wrong-tenant and insufficient-scope credentials; prove authorized reads and any guarded write paths in tests. Validate concurrency/authorization and make a documented remote HTTPS deployment configuration without actually deploying.
+- The local protocol test is **not** ChatGPT product acceptance. If real ChatGPT connector linking cannot be tested without the account/hosted endpoint, document that precise unresolved acceptance gate while still submitting the tested transport implementation in a PR.
+- Mandatory evidence: add `docs/work/issue-15-results.md` with exact commands, passing/failing/skipped test counts, CI URLs, changed components, fixes, limitations, and one next action. Update Issue #15 and roadmap #9. Do not mark complete if live ChatGPT compatibility cannot be verified.
 
-Test restarts, missed/duplicate events, lease expiry, two concurrent workers,
-arrivals during pause, explicit resume/new generation, delayed model/provider
-results, takeover/role/key revocation, and tenant isolation. All processing must
-be safe with synthetic messages and an injected fake provider. Run relevant
-route/MCP tests, complete application tests, typecheck, lint, production build,
-a clean full migration replay, SQL/RLS checks and real local Postgres races.
-Record exact commands, counts, failures/fixes and CI run URLs in Issue #5 and
-roadmap #9; update affected dependency issues with results and limitations.
-
-## Boundaries and completion
-
-No paid AI APIs, real WhatsApp messages, deployment or merge. Do not implement
-local inference (#6), UI (#7), or real provider acceptance (#8) as part of #5.
-Only disposable local infrastructure may be mutated; preserve unrelated local
-containers/data. Open and attach a reviewable PR with explicit dependencies,
-update this file for the next task, record outcomes on GitHub, and stop at #5.
+Do not wait for approval for routine non-production coding/testing in the authorized scope. Do not deploy, merge, send real WhatsApp messages, use paid AI inference, or start any local AI model. STOP after the bounded Issue #15 work and documentation are pushed.

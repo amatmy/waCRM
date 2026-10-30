@@ -69,3 +69,13 @@ See [the Issue #4 contract](copilot-crm.md) for the `copilot:crm` scope,
 audited active-session CRM actions, new handoff inputs and explicit verified-answer
 hybrid policy. The old `/api/v1/copilot/actions` handoff action is retired; use
 the audited `/api/v1/copilot/crm` action. Assistance stays disabled by default.
+
+
+## Durable inbound work
+
+See [the Issue #5 work protocol](copilot-work.md) for `/api/v1/copilot/work`,
+the dedicated `copilot:work` scope and new lease/recovery tools. Queue-owned
+reply/CRM/context operations require the returned `work_token`. Human queue
+resolution is available only through the human control API and never resends
+or reconciles an ambiguous outbox attempt. No resident/local-model worker is
+started by these interfaces.

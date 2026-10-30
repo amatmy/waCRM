@@ -180,3 +180,30 @@ it('a copilot:crm marker cannot grant access to legacy contact writes', async ()
     403
   );
 });
+
+it('a bound work key can use only its controlled work scope and allowed reads', async () => {
+  findActiveKeyByHash.mockResolvedValue(
+    row({
+      scopes: [
+        'copilot:act',
+        'copilot:work',
+        'messages:read',
+        'conversations:read',
+      ],
+      copilot_bound: true,
+    })
+  );
+  expect(
+    (await requireApiKey(reqWith(`Bearer ${KEY}`), 'copilot:work')).keyId
+  ).toBe('key-1');
+});
+it('a work marker cannot bypass legacy contact-write restrictions', async () => {
+  findActiveKeyByHash.mockResolvedValue(
+    row({ scopes: ['copilot:work', 'contacts:write'] })
+  );
+  await expectApiError(
+    requireApiKey(reqWith(`Bearer ${KEY}`), 'contacts:write'),
+    'forbidden',
+    403
+  );
+});

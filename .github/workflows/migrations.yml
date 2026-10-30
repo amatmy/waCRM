@@ -76,6 +76,9 @@ jobs:
       - name: Verify controlled CRM table access
         run: supabase db query --local --file supabase/ci/copilot-crm.sql
 
+      - name: Verify durable work table access
+        run: supabase db query --local --file supabase/ci/copilot-work.sql
+
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -87,4 +90,4 @@ jobs:
       - name: Verify guarded dispatch against real Postgres and synthetic provider
         env:
           COPILOT_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
-        run: npm test -- src/lib/copilot/service.integration.test.ts src/lib/copilot/crm.integration.test.ts --maxWorkers=1
+        run: npm test -- src/lib/copilot/service.integration.test.ts src/lib/copilot/crm.integration.test.ts src/lib/copilot/work.integration.test.ts --maxWorkers=1
