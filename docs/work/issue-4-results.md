@@ -22,7 +22,9 @@ heads passed. Fresh detached-checkout validation also passed:
 
 Issue #4 fixes both findings. Native status/contact/account changes revoke the
 claim/revision and cancel unsent work. Leaving open pauses AI; contact/account
-changes clear the latest-inbound pointer. Dispatch repeats session/key/window
+changes clear the latest-inbound pointer. CRM transactions also recheck session/key
+expiry after the final audit write; any late expiry rolls back the mutation and
+its outcome together. Dispatch repeats session/key/window
 and policy eligibility after contact/config locks, immediately before provider
 submission. Rejection regressions cover both reproduced gaps. The two diagnostic
 reproduction tests were not pushed to the dependency branch.
@@ -52,8 +54,8 @@ See `docs/copilot-crm.md` for the endpoint and policy contracts and limits.
 | Command/check                                                                                                                                                                                      | Result                                                                                                                                                      |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `npm ci`; `npm ci --prefix mcp-server`                                                                                                                                                             | Lockfiles install successfully; no dependency manifests/lockfiles changed from PR #11. Audit findings below remain.                                         |
-| `npm test`                                                                                                                                                                                         | **1,729 passed**, 67 database cases skipped in the ordinary suite (165 passing test files, 2 skipped).                                                      |
-| `COPILOT_TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres npm test -- src/lib/copilot/service.integration.test.ts src/lib/copilot/crm.integration.test.ts --maxWorkers=1` | **67 passed** against real isolated Postgres with an injected fake provider (28 dispatch + 39 CRM/hybrid cases). All ordinary-suite skips are covered here. |
+| `npm test`                                                                                                                                                                                         | **1,729 passed**, 68 database cases skipped in the ordinary suite (165 passing test files, 2 skipped).                                                      |
+| `COPILOT_TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres npm test -- src/lib/copilot/service.integration.test.ts src/lib/copilot/crm.integration.test.ts --maxWorkers=1` | **68 passed** against real isolated Postgres with an injected fake provider (28 dispatch + 40 CRM/hybrid cases). All ordinary-suite skips are covered here. |
 | `npm test --prefix mcp-server`                                                                                                                                                                     | **5 passed** using real MCP SDK/stdio and loopback HTTP fixtures, including action payloads and forbidden-tool discovery.                                   |
 | `npm run typecheck`                                                                                                                                                                                | Passed.                                                                                                                                                     |
 | `npm run lint`                                                                                                                                                                                     | Passed with 0 errors and 40 inherited warnings.                                                                                                             |
@@ -76,7 +78,10 @@ These checks were rerun successfully after the fixes.
 The original Documents checkout encountered macOS `dataless` file reads and
 checks were interrupted rather than counted as passing. Validation resumed in a
 fresh nonsynced temporary checkout of the pushed branch. No user changes were
-removed and the original checkout was preserved. Durable source and evidence
+removed and the original checkout was preserved. One later DB recheck hit
+connection refusal because the task database had already been stopped; the
+container was restarted, readiness verified, and all 68 cases reran successfully.
+Durable source and evidence
 are in GitHub, not the temporary test directory.
 
 ## Dependency audit and release limits

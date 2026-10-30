@@ -294,7 +294,7 @@ export class CopilotCrmService extends CopilotService {
           ).rows[0];
         }
       }
-      return (
+      const outcome = (
         await c.query(
           `INSERT INTO copilot_actions(account_id,key_id,operator_id,conversation_id,session_id,ownership_revision,action,idempotency_key,request,result)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
@@ -312,6 +312,8 @@ export class CopilotCrmService extends CopilotService {
           ]
         )
       ).rows[0];
+      await this.live(c, actor, input.session_id, operator);
+      return outcome;
     });
   }
   async verifyBusinessAnswer(actor: HumanActor, value: unknown) {

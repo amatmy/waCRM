@@ -22,7 +22,8 @@ comes exclusively from authentication. The database transaction locks the
 operator, key, session, policy and account-scoped conversation. It checks the
 current claim/revision, latest inbound, open/unassigned/unpaused conversation,
 enabled policy and session generation. It checks the database clock again after
-waiting for a target/deal lock. Pause, takeover and membership revocation
+waiting for a target/deal lock and after the final audit write. Expiry during
+foreign-key, trigger or audit waits rolls back the entire action and outcome. Pause, takeover and membership revocation
 serialize with these short transactions. Human controls stay available when the
 AI session is inactive. CRM actions have no external side effects or customer
 messages and do not require an open WhatsApp reply window.

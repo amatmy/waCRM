@@ -776,6 +776,41 @@ describe.skipIf(!url)('controlled CRM and hybrid policy', () => {
       ).rows[0].n
     ).toBe(1);
   });
+  it('expiry during the audit insert rolls back both the note and outcome', async () => {
+    const input = await action('note', {
+      note: 'must roll back with its audit',
+    });
+    await pool.query(
+      "UPDATE copilot_sessions SET expires_at=clock_timestamp()+interval '150 milliseconds' WHERE account_id=$1",
+      [accountId]
+    );
+    const blocker = await pool.connect();
+    await blocker.query('BEGIN');
+    await blocker.query('LOCK TABLE copilot_actions IN SHARE MODE');
+    const checked = expect(
+      service.perform(actor(), input)
+    ).rejects.toMatchObject({ status: 409 });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await blocker.query('COMMIT');
+    blocker.release();
+    await checked;
+    expect(
+      (
+        await pool.query(
+          'SELECT count(*)::int n FROM contact_notes WHERE account_id=$1',
+          [accountId]
+        )
+      ).rows[0].n
+    ).toBe(0);
+    expect(
+      (
+        await pool.query(
+          'SELECT count(*)::int n FROM copilot_actions WHERE account_id=$1',
+          [accountId]
+        )
+      ).rows[0].n
+    ).toBe(0);
+  });
   it('only admin humans can curate answers or change policy; risk markers cannot be allowlisted', async () => {
     await expect(
       knowledge('I want a refund', 'Ask the team')
