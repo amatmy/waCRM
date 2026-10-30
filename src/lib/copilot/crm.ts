@@ -321,6 +321,18 @@ export class CopilotCrmService extends CopilotService {
           ]
         )
       ).rows[0];
+      if (workId && ['handoff', 'assign'].includes(input.action)) {
+        await c.query(
+          `UPDATE copilot_work SET state='awaiting_human',reason='human_handoff',updated_at=clock_timestamp(),
+          outcome=jsonb_build_object('type','human_handoff','action_id',$2::text) WHERE id=$1 AND account_id=$3 AND lease_token=$4`,
+          [workId, outcome.id, actor.accountId, input.work_token]
+        );
+        await c.query(
+          `UPDATE copilot_work_attempts SET ended_at=coalesce(ended_at,clock_timestamp()),reason='human_handoff'
+          WHERE work_id=$1 AND token=$2`,
+          [workId, input.work_token]
+        );
+      }
       await this.live(c, actor, input.session_id, operator);
       await this.workClock(c, actor, workId, input.work_token);
       return outcome;

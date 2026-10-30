@@ -163,6 +163,42 @@ describe.skipIf(!url)('durable inbound work and recovery', () => {
       )
     ).rows[0].id as string;
   }
+  it('queued handoff atomically records human review and closes the worker attempt', async () => {
+    const row = await lease();
+    const input = {
+      action: 'handoff' as const,
+      conversation_id: conversationId,
+      session_id: sessionId,
+      inbound_id: inboundId,
+      ownership_revision: row.ownership_revision,
+      work_token: row.lease_token,
+      idempotency_key: randomUUID(),
+      payload: { summary: 'Synthetic request needs a human' },
+    };
+    const crm = new CopilotCrmService(pool, provider);
+    const outcome = await crm.perform(actor(), input);
+    const work = (
+      await pool.query(
+        'SELECT state,reason,outcome FROM copilot_work WHERE id=$1',
+        [row.id]
+      )
+    ).rows[0];
+    expect(work).toMatchObject({
+      state: 'awaiting_human',
+      reason: 'human_handoff',
+      outcome: { type: 'human_handoff', action_id: outcome.id },
+    });
+    expect(
+      (
+        await pool.query(
+          'SELECT ended_at,reason FROM copilot_work_attempts WHERE work_id=$1',
+          [row.id]
+        )
+      ).rows[0]
+    ).toMatchObject({ reason: 'human_handoff', ended_at: expect.any(Date) });
+    expect((await crm.perform(actor(), input)).id).toBe(outcome.id);
+    expect(provider).not.toHaveBeenCalled();
+  });
   it('atomically journals trusted persisted inbound while paused; explicit restart claims the same work', async () => {
     await asHuman("SELECT transition_copilot_session('pause',$1)", [sessionId]);
     const id = await insert();

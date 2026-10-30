@@ -23,11 +23,13 @@ on:
     # filters. GitHub leaves a required check that never ran stuck as
     # "expected", which blocks every PR that doesn't touch SQL.
     paths:
+      - 'mcp-server/**'
       - 'supabase/**'
       - '.github/workflows/migrations.yml'
   push:
     branches: [main]
     paths:
+      - 'mcp-server/**'
       - 'supabase/**'
       - '.github/workflows/migrations.yml'
 
