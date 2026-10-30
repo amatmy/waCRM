@@ -916,6 +916,14 @@ async function processMessage(
     })
   }
 
+  // Queue readiness is durable and follows the awaited native flow/automation phase.
+  // A failed finalization leaves work pending/incomplete, never eligible by guesswork.
+  const { error: copilotIngressError } = await supabaseAdmin().rpc('copilot_finalize_ingress', {
+    p_source_id: insertedRows[0].id,
+    p_consumed: contentConsumed || !!interactiveReplyId,
+  })
+  if (copilotIngressError) console.error('[webhook] copilot ingress completion failed:', copilotIngressError)
+
   // message.received webhook (public API). Awaited — not fire-and-forget
   // — because we're inside the route's `after()` block, which only keeps
   // the function alive for promises it can see; a detached promise could

@@ -1,76 +1,81 @@
-# Next Work Task — Issue #5: Durable inbound queue and active-session recovery
-
-## Source of truth and authorization
+# Next Work Task — Issue #6: Callable local inference during human activity
 
 Repository: `amatmy/waCRM`. Read `AGENTS.md`, roadmap
-https://github.com/amatmy/waCRM/issues/9, Issue #5
-https://github.com/amatmy/waCRM/issues/5, and their current comments before work.
-**User authorization:** Proceed with Issue #5 in the next manually initiated Work run. Scope is strictly Issue #5; the previous Issue #4 run is complete. Do not merge or deploy without separate approval.
-GitHub Issues/PRs own decisions, delivery status and blockers.
+https://github.com/amatmy/waCRM/issues/9, Issue #6
+https://github.com/amatmy/waCRM/issues/6 and current comments before starting.
+This is the next separately initiated task. The Issue #5 run stops at its PR,
+validation and GitHub reporting; it does not start #6. GitHub Issues/PRs own scope,
+decisions, blockers and verified outcomes.
 
-## Dependencies to verify before coding
+## Verify dependencies first
 
-- PR #10: https://github.com/amatmy/waCRM/pull/10 — human sessions, head
-  `51073f036860c04d5ddd19a2be81348407ed0350` at the Issue #4 review.
-- PR #11: https://github.com/amatmy/waCRM/pull/11 — guarded replies/outbox, head
-  `ea9057373c18745a8368c64ce61213ef4c15a5a5` at the Issue #4 review; based on #10.
-- PR #12: https://github.com/amatmy/waCRM/pull/12 — Issue #4 branch
-  `feat/issue-4-controlled-crm`, based on #11. Consult this PR and
-  `docs/work/issue-4-results.md` for exact tested head and CI evidence.
-- All remain unmerged unless GitHub now proves otherwise. Do not infer merge
-  from green checks or merge any dependency without explicit user approval.
-  Create an isolated branch from the correct dependency head and document the
-  base on Issue #5. Preserve upstream MIT attribution/history.
+PRs #10 (sessions), #11 (guarded replies), #12 (controlled CRM/hybrid) and the
+Issue #5 PR on `feat/issue-5-durable-inbound` form a review stack. Base of #5 is
+PR #12 head `d0b2873b72059cfeaeda7df2afb213b27ebf1c64` at implementation start.
+Read the live PR state and exact heads; all were unmerged during #5. Do not infer
+merge from green checks, and do not merge/deploy without separate user approval.
+Use an isolated branch based on the correct dependency head and document it on #6.
+Preserve upstream MIT attribution/history.
 
-The Issue #4 dependency audit reports 13 inherited application advisories
-(including critical Next.js) and 7 MCP advisories. They remain release blockers
-tracked with the audit evidence in Issues #1/#4/#9; no dependency upgrades were
-performed during #4. Do not treat green tests as security or deployment approval.
+Read `docs/copilot.md`, `docs/copilot-dispatch.md`, `docs/copilot-crm.md`,
+`docs/copilot-work.md`, `docs/work/issue-5-results.md`, migrations and tests.
+The inherited dependency audit still flags critical Next.js and other app/MCP
+advisories; the five inherited local DB security warnings also remain. These are
+release blockers tracked in #1/#9, not permission for unrelated upgrades during #6.
 
-Read `docs/copilot.md`, `docs/copilot-dispatch.md`, `docs/copilot-crm.md`, the
-actual ingress/webhook and event-delivery code, and all copilot migrations/tests.
-Issue #4 fences status/contact/account edits and rechecks dispatch eligibility
-after contact/config lock waits; retain these fixes when rebasing the stack.
+## Objective when the user starts #6
 
-## Authorized scope when the user starts #5
+Evaluate a locally hosted model/runtime on the actual available hardware. Verify
+license, supported invocation, resource use and latency using primary sources
+and actual local tests. No paid inference APIs, browser automation of consumer
+chat, or assumption that ChatGPT/Dot is a continuous webhook listener. Interactive
+MCP clients remain interactive until an invoked runtime and writes are proven.
+Do not install/download an arbitrary large model without checking hardware,
+license and the task's resource constraints first.
 
-Persist inbound work in the CRM database, deduplicate provider message IDs,
-claim work with bounded worker leases, preserve pending work during pause, and
-recover after crashes/restarts. Existing upstream outbound webhook deliveries
-are best-effort single attempts: reconcile account-scoped REST reads so missed
-notifications do not lose inbound work. A ChatGPT session is not a webhook
-listener. No independent scheduled AI shifts or 24/7 requirement.
+Implement the local processor and REST/MCP adapter for the existing callable
+`runWorkCycle`/work protocol, keeping credentials and lease capabilities outside
+model-generated authority. Prove stored inbound → local decision → server-guarded
+reply or human handoff during an explicitly active human session. Use bounded,
+callable cycles while the human is working, with explicit lease renewal if needed;
+no scheduled AI shifts or requirement for 24/7 execution. Do not auto-start or
+renew a human session from a worker/model. UI heartbeat/presence remains #7.
 
-Every processing/dispatch step must enforce the current human session,
-operator/key membership, conversation ownership revision and current inbound.
-Paused arrivals remain pending. Never replay stale results into a human-owned
-conversation or claim work through a replaced human session. Keep the existing
-outbox and action log as authoritative outcomes; queue leases must not become a
-second send-authorization system. Preserve audit history and handoff summaries.
+Treat customer messages and retrieved documents as untrusted data. Use verified
+business sources and preserve the exact server-authorized hybrid policy; the model
+cannot mark its own knowledge verified, approve replies, substitute identities or
+override permissions. Negotiation/refund/dispute/uncertainty and requests for a
+person require human approval/handoff. Never add raw-send/broadcast bypasses.
 
-Unknown/dispatching provider attempts must be reconciled, never blindly retried
-or recreated under a fresh key. One outbox entry per inbound currently prevents
-replacement drafts after policy/context changes. Define a reviewable human-only
-resolution contract if needed; do not silently remove the duplicate-send fence.
-Reply authorization is either exact human approval or the server-verified,
-unexpired exact-match business answer in explicit hybrid mode. Policy/rule edits
-invalidate old unsent authorizations. AI cannot curate business knowledge.
+## Recovery and safety contracts to retain
 
-## Acceptance and evidence
+- Queue claims mint token/revision generations and cap worker leases by human
+  expiry. Supply the current `work_token` to all queued reply/CRM/context actions;
+  delayed/cancelled model results must fail after expiry/restart/takeover/new inbound.
+- The trusted ingestion-completion marker gates all AI processing after native
+  flow/automation handling. Incomplete historical/interrupted ingress requires
+  explicit human review; do not guess readiness or replay native effects.
+- Canonical DB storage and bounded REST reconciliation own pending work; best-effort
+  fan-out is only a wake-up hint. Raw envelopes lost before CRM storage remain an
+  upstream ingress limitation, not something REST can reconstruct.
+- The outbox/action log remain authoritative. Never retry/recreate unknown or
+  dispatching provider attempts. An already-submitted request cannot be recalled.
+- One immutable outbox per inbound remains. Recovery of stale drafts goes to a
+  human; no automatic replacement/reapproval. Human `resolve_work` records an
+  explicit task-resolution attestation, not delivery or provider reconciliation.
+- `runWorkCycle` provides a bounded injected-processor seam, not an already running
+  local model/worker host. A host waiting for approval must renew a still-live
+  lease while the human remains active, otherwise use the conservative human path.
 
-Test restarts, missed/duplicate events, lease expiry, two concurrent workers,
-arrivals during pause, explicit resume/new generation, delayed model/provider
-results, takeover/role/key revocation, and tenant isolation. All processing must
-be safe with synthetic messages and an injected fake provider. Run relevant
-route/MCP tests, complete application tests, typecheck, lint, production build,
-a clean full migration replay, SQL/RLS checks and real local Postgres races.
-Record exact commands, counts, failures/fixes and CI run URLs in Issue #5 and
-roadmap #9; update affected dependency issues with results and limitations.
+## Tests and delivery
 
-## Boundaries and completion
-
-No paid AI APIs, real WhatsApp messages, deployment or merge. Do not implement
-local inference (#6), UI (#7), or real provider acceptance (#8) as part of #5.
-Only disposable local infrastructure may be mutated; preserve unrelated local
-containers/data. Open and attach a reviewable PR with explicit dependencies,
-update this file for the next task, record outcomes on GitHub, and stop at #5.
+Use stored synthetic messages and fake WhatsApp transport only. Test local model
+availability/failure/timeout, prompt injection and unknown knowledge, active/pause/
+restart, two workers, delayed results, key/role revocation, tenant isolation and
+human takeover. Distinguish actual local-model evidence from injected/mocked tests.
+Run full application/MCP tests, types/lint/build, clean migrations, SQL/RLS and
+real local Postgres races; record exact commands/counts and CI links in #6/#9 and
+all affected dependency issues. No real WhatsApp message, paid API, deployment or
+merge. Do not implement the human UI (#7) or live acceptance (#8) as part of #6.
+Open and attach a PR, document outcomes and limits, update this brief for the next
+task, stop at #6, and preserve unrelated local containers/data.

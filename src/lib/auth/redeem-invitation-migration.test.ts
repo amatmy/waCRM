@@ -21,6 +21,9 @@ const tablesWithoutDomainData = new Set([
   "copilot_keys",
   "copilot_policies",
   "copilot_outbox",
+  // Work/attempts have mandatory conversation/parent FKs; the domain-data guard already covers them.
+  "copilot_work",
+  "copilot_work_attempts",
 ]);
 
 function accountScopedTables(): Set<string> {

@@ -7,6 +7,7 @@ const h = vi.hoisted(() => ({
   bindKey: vi.fn(),
   reconcile: vi.fn(),
   verifyAnswer: vi.fn(),
+  resolveHuman: vi.fn(),
 }));
 vi.mock('@/lib/auth/account', () => ({
   requireRole: h.auth,
@@ -30,6 +31,11 @@ vi.mock('@/lib/copilot/service', () => ({
 vi.mock('@/lib/copilot/crm', () => ({
   CopilotCrmService: class {
     verifyBusinessAnswer = h.verifyAnswer;
+  },
+}));
+vi.mock('@/lib/copilot/work', () => ({
+  CopilotWorkService: class {
+    resolveHuman = h.resolveHuman;
   },
 }));
 import { POST } from './route';
@@ -100,4 +106,23 @@ it('only the human control surface can select hybrid policy or curate verified a
     (await POST(req({ action: 'policy', enabled: true, mode: 'autonomous' })))
       .status
   ).toBe(400);
+});
+
+it('requires the human control identity for queue resolution and forwards only an explicit summary', async () => {
+  expect(
+    (
+      await POST(
+        req({
+          action: 'resolve_work',
+          work_id: id,
+          summary: 'Operator handled the task',
+        })
+      )
+    ).status
+  ).toBe(200);
+  expect(h.resolveHuman).toHaveBeenCalledWith(
+    { accountId: 'human-account', userId: 'human-id' },
+    id,
+    'Operator handled the task'
+  );
 });

@@ -5,7 +5,7 @@ This document describes the implementation and its boundaries.
 
 ## Architecture
 
-WhatsApp → existing CRM ingestion/database → durable pending work (planned) →
+WhatsApp → existing CRM ingestion/database → durable inbound work (implemented in the Issue #5 review branch) →
 active operator session → callable local runtime (planned) → extended existing
 MCP → server-enforced policy/ownership/outbox dispatch or human handoff (implemented in the guarded-dispatch review branch).
 
@@ -127,3 +127,10 @@ See [the Issue #4 contract](copilot-crm.md) for the `copilot:crm` scope,
 audited active-session CRM actions, new handoff inputs and explicit verified-answer
 hybrid policy. The old `/api/v1/copilot/actions` handoff action is retired; use
 the audited `/api/v1/copilot/crm` action. Assistance stays disabled by default.
+
+
+## Durable inbound recovery
+
+See [the work protocol](copilot-work.md) for atomic ingress journaling, bounded
+REST reconciliation, generation-fenced worker leases and conservative human
+resolution. A callable worker cycle exists; local inference and its host remain #6.

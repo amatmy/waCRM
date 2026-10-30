@@ -23,6 +23,7 @@ export interface ReplyInput {
   inbound_id: string;
   idempotency_key: string;
   text: string;
+  work_token?: string;
 }
 export interface Outbox {
   id: string;
@@ -41,6 +42,7 @@ export interface Outbox {
   attempted_at?: Date | string | null;
   authorization_basis?: string;
   knowledge_id?: string | null;
+  work_token?: string | null;
 }
 const conflict = (message: string) => new ApiError('bad_request', message, 409);
 const missing = () => new ApiError('not_found', 'Resource not found', 404);
@@ -78,7 +80,7 @@ export class CopilotService {
       `SELECT k.id FROM api_keys k JOIN copilot_keys b ON b.key_id=k.id
       WHERE k.id=$1 AND k.account_id=$2 AND b.account_id=$2 AND b.operator_id=$3
       AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at>clock_timestamp())
-      AND 'copilot:act'=ANY(k.scopes) AND k.scopes <@ ARRAY['copilot:act','copilot:crm','contacts:read','conversations:read','messages:read']::text[]
+      AND 'copilot:act'=ANY(k.scopes) AND k.scopes <@ ARRAY['copilot:act','copilot:crm','copilot:work','contacts:read','conversations:read','messages:read']::text[]
       FOR SHARE OF k,b`,
       [actor.keyId, actor.accountId, operator]
     );
@@ -86,18 +88,12 @@ export class CopilotService {
       throw forbidden('Copilot key is revoked, expired or missing its scope');
     return operator as string;
   }
-  protected async guard(
-    c: PoolClient,
-    actor: KeyActor,
-    input: Pick<ReplyInput, 'conversation_id' | 'session_id'>,
-    revision?: string,
-    inboundId?: string
-  ) {
+  protected async active(c: PoolClient, actor: KeyActor, sessionId: string) {
     const operator = await this.key(c, actor);
     const session = await c.query(
       `SELECT session_id FROM copilot_sessions WHERE account_id=$1 AND operator_id=$2
       AND session_id=$3 AND state='active' AND expires_at>clock_timestamp() FOR SHARE`,
-      [actor.accountId, operator, input.session_id]
+      [actor.accountId, operator, sessionId]
     );
     if (!session.rows.length)
       throw conflict('Human session paused, expired or replaced');
@@ -106,6 +102,63 @@ export class CopilotService {
       [actor.accountId]
     );
     if (!policy.rows.length) throw forbidden('Copilot policy is disabled');
+    return {
+      operator,
+      policyRevision: String(policy.rows[0].revision),
+      mode: policy.rows[0].mode as string,
+    };
+  }
+  protected async clock(
+    c: PoolClient,
+    actor: KeyActor,
+    sessionId: string,
+    operator: string
+  ) {
+    if (
+      !(
+        await c.query(
+          `SELECT 1 FROM copilot_sessions s JOIN api_keys k ON k.id=$3
+      WHERE s.account_id=$1 AND s.operator_id=$2 AND s.session_id=$4 AND s.state='active'
+      AND s.expires_at>clock_timestamp() AND (k.expires_at IS NULL OR k.expires_at>clock_timestamp())`,
+          [actor.accountId, operator, actor.keyId, sessionId]
+        )
+      ).rows.length
+    )
+      throw conflict('Human session or key expired while waiting');
+  }
+  protected async workClock(
+    c: PoolClient,
+    actor: KeyActor,
+    workId?: string | null,
+    token?: string | null
+  ) {
+    if (!workId) return;
+    if (
+      !(
+        await c.query(
+          `SELECT 1 FROM copilot_work w JOIN api_keys k ON k.id=w.key_id WHERE w.id=$1 AND w.account_id=$2
+      AND w.key_id=$3 AND w.lease_token=$4 AND w.lease_until>clock_timestamp()
+      AND k.scopes @> ARRAY['copilot:work','messages:read','conversations:read']::text[]`,
+          [workId, actor.accountId, actor.keyId, token ?? null]
+        )
+      ).rows.length
+    )
+      throw conflict('Worker lease expired, replaced or missing its scopes');
+  }
+  protected async guard(
+    c: PoolClient,
+    actor: KeyActor,
+    input: Pick<ReplyInput, 'conversation_id' | 'session_id'>,
+    revision?: string,
+    inboundId?: string,
+    workToken?: string | null,
+    allocateWork = false
+  ) {
+    const { operator, policyRevision, mode } = await this.active(
+      c,
+      actor,
+      input.session_id
+    );
     const conv = await c.query(
       'SELECT * FROM conversations WHERE id=$1 AND account_id=$2 FOR UPDATE',
       [input.conversation_id, actor.accountId]
@@ -131,19 +184,48 @@ export class CopilotService {
     }
     if (inboundId && row.copilot_latest_inbound_id !== inboundId)
       throw conflict('Latest inbound context changed');
-    // Recheck after all potentially blocking locks; statement/transaction NOW is insufficient.
-    const live = await c.query(
-      `SELECT 1 FROM copilot_sessions s JOIN api_keys k ON k.id=$3 WHERE s.account_id=$1 AND s.operator_id=$2
-      AND s.expires_at>clock_timestamp() AND (k.expires_at IS NULL OR k.expires_at>clock_timestamp())`,
-      [actor.accountId, operator, actor.keyId]
-    );
-    if (!live.rows.length)
-      throw conflict('Human session expired while waiting');
+    // Even ad-hoc APIs must not race the signed ingress's native flow phase.
+    if (
+      row.copilot_latest_inbound_id &&
+      (
+        await c.query(
+          'SELECT 1 FROM copilot_work WHERE source_id=$1 AND account_id=$2 AND NOT ready',
+          [row.copilot_latest_inbound_id, actor.accountId]
+        )
+      ).rows.length
+    )
+      throw conflict('Inbound processing has not completed');
+    if (row.copilot_work_id && !allocateWork) {
+      if (
+        row.copilot_work_token !== workToken ||
+        !(
+          await c.query(
+            `SELECT 1 FROM copilot_work WHERE id=$1 AND account_id=$2
+        AND key_id=$3 AND session_id=$4 AND ownership_revision=$5 AND policy_revision=$6
+        AND source_id=$7 AND lease_token=$8 AND state='leased' FOR SHARE`,
+            [
+              row.copilot_work_id,
+              actor.accountId,
+              actor.keyId,
+              input.session_id,
+              row.copilot_revision,
+              policyRevision,
+              row.copilot_latest_inbound_id,
+              workToken ?? null,
+            ]
+          )
+        ).rows.length
+      )
+        throw conflict('Worker generation or conversation context changed');
+      await this.workClock(c, actor, row.copilot_work_id, workToken);
+    }
+    await this.clock(c, actor, input.session_id, operator);
     return {
       operator,
       conv: row,
-      policyRevision: String(policy.rows[0].revision),
-      mode: policy.rows[0].mode as string,
+      policyRevision,
+      mode,
+      workId: row.copilot_work_id as string | null,
     };
   }
 
@@ -196,6 +278,7 @@ export class CopilotService {
             ![
               'copilot:act',
               'copilot:crm',
+              'copilot:work',
               'contacts:read',
               'conversations:read',
               'messages:read',
@@ -203,7 +286,7 @@ export class CopilotService {
         )
       ) {
         throw badRequest(
-          'Bind a dedicated key with copilot:act, optional copilot:crm, and read scopes only'
+          'Bind a dedicated key with copilot:act, optional copilot:crm/copilot:work, and read scopes only'
         );
       }
       const result = await c.query(
@@ -266,7 +349,8 @@ export class CopilotService {
           row.reply_text !== input.text ||
           row.inbound_id !== input.inbound_id ||
           row.session_id !== input.session_id ||
-          String(row.ownership_revision) !== input.ownership_revision
+          String(row.ownership_revision) !== input.ownership_revision ||
+          (row.work_token ?? undefined) !== input.work_token
         )
           throw conflict('Idempotency key payload changed');
         return row;
@@ -276,7 +360,8 @@ export class CopilotService {
         actor,
         input,
         input.ownership_revision,
-        input.inbound_id
+        input.inbound_id,
+        input.work_token
       );
       const knowledgeId =
         gate.mode === 'hybrid'
@@ -289,7 +374,7 @@ export class CopilotService {
           : null;
       const result = await c.query(
         `INSERT INTO copilot_outbox(account_id,key_id,operator_id,conversation_id,session_id,ownership_revision,
-        inbound_id,policy_revision,idempotency_key,reply_text,state,authorization_basis,knowledge_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        inbound_id,policy_revision,idempotency_key,reply_text,state,authorization_basis,knowledge_id,work_token) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
         ON CONFLICT DO NOTHING RETURNING *`,
         [
           actor.accountId,
@@ -305,12 +390,15 @@ export class CopilotService {
           knowledgeId ? 'approved' : 'draft',
           knowledgeId ? 'verified_answer' : 'human_approval',
           knowledgeId,
+          input.work_token ?? null,
         ]
       );
       if (!result.rows.length)
         throw conflict(
           'An outbox entry already exists for this inbound; inspect its outcome'
         );
+      await this.clock(c, actor, input.session_id, gate.operator);
+      await this.workClock(c, actor, gate.workId, input.work_token);
       return result.rows[0];
     });
   }
@@ -342,7 +430,8 @@ export class CopilotService {
         { accountId: actor.accountId, keyId: row.key_id },
         row,
         String(row.ownership_revision),
-        row.inbound_id
+        row.inbound_id,
+        row.work_token
       );
       if (gate.policyRevision !== String(row.policy_revision))
         throw conflict('Policy changed; approval is stale');
@@ -469,7 +558,8 @@ export class CopilotService {
         actor,
         row,
         String(row.ownership_revision),
-        row.inbound_id
+        row.inbound_id,
+        row.work_token
       );
       if (gate.policyRevision !== String(row.policy_revision))
         throw conflict('Policy changed');
@@ -493,7 +583,8 @@ export class CopilotService {
           actor,
           row,
           String(row.ownership_revision),
-          row.inbound_id
+          row.inbound_id,
+          row.work_token
         );
         const current = (
           await c.query('SELECT * FROM copilot_outbox WHERE id=$1 FOR UPDATE', [
@@ -523,7 +614,8 @@ export class CopilotService {
             actor,
             current,
             String(current.ownership_revision),
-            current.inbound_id
+            current.inbound_id,
+            current.work_token
           );
           const finalEligible = await this.eligible(
             c,

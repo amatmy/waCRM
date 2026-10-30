@@ -37,6 +37,7 @@ export function registerCopilotTools(server: McpServer, client: WacrmClient) {
         inbound_id: z.string().uuid(),
         idempotency_key: z.string().min(8).max(128),
         text: z.string().min(1).max(4096),
+        work_token: z.string().uuid().optional(),
       },
       annotations,
     },
@@ -68,7 +69,9 @@ export function registerCopilotTools(server: McpServer, client: WacrmClient) {
       jsonResult(await client.copilotAction({ action: 'dispatch', ...args }))
     )
   );
+  const work_token = z.string().uuid().optional();
   const common = {
+    work_token,
     conversation_id,
     session_id,
     ownership_revision,
@@ -80,7 +83,12 @@ export function registerCopilotTools(server: McpServer, client: WacrmClient) {
     {
       description:
         'Read eligible account operators, linked deals and their stages for a current claim. Requires copilot:crm.',
-      inputSchema: { conversation_id, session_id, ownership_revision },
+      inputSchema: {
+        conversation_id,
+        session_id,
+        ownership_revision,
+        work_token,
+      },
       annotations: { ...annotations, readOnlyHint: true },
     },
     handle(async (args) =>

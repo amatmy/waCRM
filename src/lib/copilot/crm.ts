@@ -1,11 +1,12 @@
 import type { PoolClient } from 'pg';
 import { ApiError, badRequest, forbidden } from '@/lib/api/v1/respond';
 import { transaction } from './db';
-import { object, text, uuid, revision } from './input';
+import { object, text, uuid, revision, optionalUuid } from './input';
 import { CopilotService, type KeyActor, type HumanActor } from './service';
 import { normalizeQuestion, requiresHuman } from './policy';
 
 export type CrmInput = {
+  work_token?: string;
   action: 'assign' | 'handoff' | 'note' | 'status' | 'deal';
   conversation_id: string;
   session_id: string;
@@ -31,6 +32,7 @@ export function crmInput(value: unknown): CrmInput {
     'ownership_revision',
     'idempotency_key',
     'payload',
+    'work_token',
   ]);
   const action = text(body, 'action', 20) as CrmInput['action'];
   const payload = object(body.payload);
@@ -78,6 +80,9 @@ export function crmInput(value: unknown): CrmInput {
   if (idempotency_key.length < 8) throw badRequest('Invalid idempotency key');
   return {
     action,
+    ...(body.work_token === undefined
+      ? {}
+      : { work_token: optionalUuid(body, 'work_token') }),
     conversation_id: uuid(body, 'conversation_id'),
     session_id: uuid(body, 'session_id'),
     inbound_id: uuid(body, 'inbound_id'),
@@ -134,7 +139,8 @@ export class CopilotCrmService extends CopilotService {
     actor: KeyActor,
     conversationId: string,
     sessionId: string,
-    ownershipRevision: string
+    ownershipRevision: string,
+    workToken?: string
   ) {
     return transaction(this.pool, async (c) => {
       await this.crmKey(c, actor);
@@ -142,7 +148,9 @@ export class CopilotCrmService extends CopilotService {
         c,
         actor,
         { conversation_id: conversationId, session_id: sessionId },
-        ownershipRevision
+        ownershipRevision,
+        undefined,
+        workToken
       );
       await this.contact(c, actor, conv.contact_id);
       const operators = (
@@ -211,12 +219,13 @@ export class CopilotCrmService extends CopilotService {
           throw conflict('Idempotency key payload changed');
         return previous; // Read-only replay works after pause/takeover; never reruns.
       }
-      const { conv, operator } = await this.guard(
+      const { conv, operator, workId } = await this.guard(
         c,
         actor,
         input,
         input.ownership_revision,
-        input.inbound_id
+        input.inbound_id,
+        input.work_token
       );
       await this.contact(c, actor, conv.contact_id);
       const p = input.payload;
@@ -313,6 +322,7 @@ export class CopilotCrmService extends CopilotService {
         )
       ).rows[0];
       await this.live(c, actor, input.session_id, operator);
+      await this.workClock(c, actor, workId, input.work_token);
       return outcome;
     });
   }
