@@ -1,3 +1,8 @@
+> **Fork behavior:** raw machine message/broadcast sending is disabled. Use the
+> [guarded copilot outbox and human approval](copilot-dispatch.md). The legacy
+> send descriptions below are retained as upstream reference, not available
+> capabilities of this fork. Read endpoints remain available.
+
 # MCP server
 
 wacrm ships a [Model Context Protocol](https://modelcontextprotocol.io)
@@ -29,10 +34,10 @@ other API call.
          "args": ["-y", "wacrm-mcp"],
          "env": {
            "WACRM_BASE_URL": "https://crm.example.com",
-           "WACRM_API_KEY": "wacrm_live_xxxxxxxxxxxxxxxxxxxxxxxx"
-         }
-       }
-     }
+           "WACRM_API_KEY": "wacrm_live_xxxxxxxxxxxxxxxxxxxxxxxx",
+         },
+       },
+     },
    }
    ```
 

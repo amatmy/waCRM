@@ -11,6 +11,7 @@ import { registerReadTools } from './read.js';
 import { registerWriteTools } from './write.js';
 import { registerBroadcastTools } from './broadcast.js';
 import { handle, jsonResult } from './shared.js';
+import { registerCopilotTools } from './copilot.js';
 
 export function registerTools(
   server: McpServer,
@@ -22,16 +23,16 @@ export function registerTools(
 
   if (config.copilotMode) {
     // Also enforce here for callers constructing Config without loadConfig.
-    if (config.enableWrites || config.enableBroadcasts || !config.operatorId) {
+    if (config.enableBroadcasts || !config.operatorId) {
       throw new Error(
-        'Copilot requires an operator and read-only configuration'
+        'Copilot requires an operator and forbids broadcasts'
       );
     }
     server.registerTool(
       'get_copilot_session',
       {
         description:
-          'Read the human operator session. This does not activate assistance or start a listener. Copilot replies are not implemented yet.',
+          'Read the human operator session. This does not activate assistance, approve a reply or start a listener.',
         inputSchema: {},
         annotations: {
           readOnlyHint: true,
@@ -47,7 +48,8 @@ export function registerTools(
   }
 
   if (config.enableWrites) {
-    registerWriteTools(server, client);
+    if(config.copilotMode) registerCopilotTools(server,client);
+    else registerWriteTools(server, client);
     enabled.push('write');
   }
 

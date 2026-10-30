@@ -133,6 +133,7 @@ function makeSupabaseMock() {
         error: null,
       })),
     },
+    rpc: vi.fn(async () => ({ data: true, error: null })),
     from: vi.fn((table: string) => builder(table)),
   }
 }

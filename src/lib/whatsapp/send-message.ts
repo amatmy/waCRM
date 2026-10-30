@@ -238,6 +238,13 @@ export async function sendMessageToConversation(
 
   const contact = conversation.contact;
 
+  // Only a human JWT can use the legacy shared sender. Revoke the AI
+  // claim before submitting this manual reply, serialized with dispatch.
+  const takeover = await db.rpc('copilot_manual_takeover', { p_conversation_id: conversationId });
+  if (takeover.error || takeover.data !== true) {
+    throw new SendMessageError('copilot_guard_unavailable', 'Human takeover could not be established', 503);
+  }
+
   // A contact is addressable by phone number OR by business-scoped user
   // ID. Meta withholds the phone number for a customer who has adopted
   // a WhatsApp username, so those contacts carry only a BSUID and are

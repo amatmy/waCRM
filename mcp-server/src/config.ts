@@ -62,9 +62,9 @@ export function loadConfig(): Config {
   ) {
     throw new Error('Copilot mode requires WACRM_OPERATOR_ID to be a UUID.');
   }
-  if (copilotMode && (enableWrites || enableBroadcasts)) {
+  if (copilotMode && enableBroadcasts) {
     throw new Error(
-      'Copilot writes are unavailable until guarded replies and handoff are implemented. Use a read-only API key.'
+      'Copilot broadcasts are disabled. Use guarded reply tools only.'
     );
   }
 

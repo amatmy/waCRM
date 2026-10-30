@@ -36,7 +36,7 @@ are security invokers. Direct table writes and anonymous access are revoked.
 RLS restricts human reads to their own session. Service-role reads are available
 only through account-filtered API calls. Operator ID is configured by the MCP
 host, not supplied as model tool input. **Session active does not grant send
-authority.** The first milestone enables no copilot replies.
+authority.** Guarded human-approved dispatch and explicit handoff are described in [the dispatch contract](copilot-dispatch.md).
 
 ### Human endpoint
 
@@ -94,12 +94,8 @@ An MCP host that supports local stdio servers can launch:
 ```
 
 Grant only `contacts:read`, `conversations:read`, and `messages:read` to this key.
-Do not grant send/write/broadcast scopes. This adds `get_copilot_session` to the
-existing read tools. Existing CRM reads remain available when paused. Write
-flags with copilot mode fail startup. This is a tool-surface guard, not yet a
-server-side restriction on legacy write-capable keys. The latter is required
-by #3 before any autonomous sends are enabled. Legacy non-copilot MCP behavior
-is retained for compatibility; it must not be used to bypass this workflow.
+Do not grant legacy send/write/broadcast scopes. For guarded replies add `copilot:act` and follow [the dispatch setup](copilot-dispatch.md). This adds `get_copilot_session` to the
+existing read tools. Existing CRM reads remain available when paused. With `WACRM_ENABLE_WRITES=true`, copilot mode exposes only guarded outbox/claim/handoff tools. Broadcast flags are rejected. The server also rejects raw machine sends and broadcasts, including from legacy keys; see the dispatch contract for this deliberate compatibility change.
 
 ## Verification
 

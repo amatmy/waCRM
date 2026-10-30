@@ -92,6 +92,7 @@ interface SendTextEngineArgs {
 export async function engineSendText(
   args: SendTextEngineArgs,
 ): Promise<{ whatsapp_message_id: string }> {
+  if (args.aiGenerated) throw new Error('AI sends must use the guarded copilot outbox');
   const db = supabaseAdmin()
 
   const { data: contact, error: contactErr } = await db

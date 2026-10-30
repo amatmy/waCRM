@@ -225,6 +225,7 @@ function sendPathDb(
   };
 
   return {
+    rpc: async () => ({ data: true, error: null }),
     from(table: string) {
       const builder: Record<string, unknown> = {
         select: () => builder,

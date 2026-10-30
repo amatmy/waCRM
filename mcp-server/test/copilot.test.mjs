@@ -16,7 +16,7 @@ const config = {
   WACRM_ENABLE_BROADCASTS: 'false',
 };
 
-test('legacy MCP write opt-in remains available outside copilot mode', async (t) => {
+test('legacy MCP tool discovery remains compatible; the server enforces send policy', async (t) => {
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: ['dist/index.js'],
@@ -42,14 +42,9 @@ test('legacy MCP write opt-in remains available outside copilot mode', async (t)
 
 for (const [name, overrides, expected] of [
   [
-    'write bypass',
-    { WACRM_ENABLE_WRITES: 'true' },
-    /Copilot writes are unavailable/,
-  ],
-  [
     'broadcast bypass',
     { WACRM_ENABLE_BROADCASTS: 'true' },
-    /Copilot writes are unavailable/,
+    /Copilot broadcasts are disabled/,
   ],
   ['missing operator', { WACRM_OPERATOR_ID: '' }, /requires WACRM_OPERATOR_ID/],
 ]) {
@@ -185,4 +180,93 @@ test('MCP initialize, tool list and CRM reads work over stdio without inference'
   });
   assert.equal(blocked.isError, true);
   assert.equal(requests.length, before);
+});
+
+test('guarded copilot writes expose no raw send, approval or activation tool', async (t) => {
+  const actions = [];
+  const http = createServer(async (req, res) => {
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    actions.push({ path: req.url, method: req.method, body: JSON.parse(body) });
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ data: { id: operator, state: 'draft' } }));
+  });
+  await new Promise((resolve) => http.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise((resolve) => http.close(resolve)));
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: ['dist/index.js'],
+    stderr: 'pipe',
+    env: {
+      ...process.env,
+      ...config,
+      WACRM_ENABLE_WRITES: 'true',
+      WACRM_BASE_URL: `http://127.0.0.1:${http.address().port}`,
+    },
+  });
+  const client = new Client({ name: 'guarded-copilot', version: '1.0.0' });
+  await client.connect(transport);
+  t.after(() => client.close());
+  const names = (await client.listTools()).tools.map((tool) => tool.name);
+  for (const name of [
+    'claim_conversation',
+    'prepare_authorized_reply',
+    'get_reply_outcome',
+    'send_authorized_reply',
+    'handoff_to_human',
+  ])
+    assert.ok(names.includes(name));
+  for (const name of [
+    'send_message',
+    'send_broadcast',
+    'create_contact',
+    'update_contact',
+    'approve_reply',
+    'start_session',
+    'takeover_conversation',
+  ])
+    assert.ok(!names.includes(name));
+  await client.callTool({
+    name: 'claim_conversation',
+    arguments: { conversation_id: operator, session_id: operator },
+  });
+  await client.callTool({
+    name: 'prepare_authorized_reply',
+    arguments: {
+      conversation_id: operator,
+      session_id: operator,
+      ownership_revision: '1',
+      inbound_id: operator,
+      idempotency_key: 'synthetic-key',
+      text: 'Synthetic draft',
+    },
+  });
+  await client.callTool({
+    name: 'get_reply_outcome',
+    arguments: { outbox_id: operator },
+  });
+  await client.callTool({
+    name: 'send_authorized_reply',
+    arguments: { outbox_id: operator },
+  });
+  await client.callTool({
+    name: 'handoff_to_human',
+    arguments: {
+      conversation_id: operator,
+      ownership_revision: '1',
+      summary: 'Synthetic handoff',
+    },
+  });
+  assert.deepEqual(
+    actions.map((a) => a.body.action),
+    ['claim', 'prepare', 'inspect', 'dispatch', 'handoff']
+  );
+  assert.ok(
+    actions.every(
+      (a) =>
+        a.method === 'POST' &&
+        a.path === '/api/v1/copilot/actions' &&
+        !('operator_id' in a.body)
+    )
+  );
 });
