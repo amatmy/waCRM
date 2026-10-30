@@ -11,6 +11,7 @@ import {
   vi,
 } from 'vitest';
 import { CopilotService, type Outbox, type ReplyInput } from './service';
+import { CopilotCrmService } from './crm';
 import { ProviderRejected } from './provider';
 
 const url = process.env.COPILOT_TEST_DATABASE_URL;
@@ -95,7 +96,7 @@ describe.skipIf(!url)('copilot real-database authorization and races', () => {
     ).rows[0].account_id;
     keyId = (
       await pool.query(
-        "INSERT INTO api_keys(account_id,created_by,name,key_prefix,key_hash,scopes) VALUES($1,$2,'fixture','fixture',$3,ARRAY['copilot:act','conversations:read','messages:read']) RETURNING id",
+        "INSERT INTO api_keys(account_id,created_by,name,key_prefix,key_hash,scopes) VALUES($1,$2,'fixture','fixture',$3,ARRAY['copilot:act','copilot:crm','conversations:read','messages:read']) RETURNING id",
         [accountId, userId, randomUUID()]
       )
     ).rows[0].id;
@@ -326,11 +327,17 @@ describe.skipIf(!url)('copilot real-database authorization and races', () => {
   });
   it('handoff preserves history and summary and fences future AI sends', async () => {
     const row = await approved();
-    const result = await service.handoff(
+    const { result } = await new CopilotCrmService(pool, provider).perform(
       actor(),
-      conversationId,
-      String(row.ownership_revision),
-      'Synthetic handoff summary'
+      {
+        action: 'handoff',
+        conversation_id: conversationId,
+        session_id: sessionId,
+        inbound_id: inboundId,
+        ownership_revision: String(row.ownership_revision),
+        idempotency_key: randomUUID(),
+        payload: { summary: 'Synthetic handoff summary' },
+      }
     );
     expect(result.ai_handoff_summary).toBe('Synthetic handoff summary');
     expect(result.assigned_agent_id).toBe(userId);

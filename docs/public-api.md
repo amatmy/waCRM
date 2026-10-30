@@ -411,3 +411,11 @@ broadcasts, and outbound webhooks — the full scope of
 [#245](https://github.com/ArnasDon/wacrm/issues/245). Future ideas
 (deals/pipelines, templates, flows, a delivery queue for webhooks) are
 not yet scheduled.
+
+
+## Controlled CRM and hybrid policy
+
+See [the Issue #4 contract](copilot-crm.md) for the `copilot:crm` scope,
+audited active-session CRM actions, new handoff inputs and explicit verified-answer
+hybrid policy. The old `/api/v1/copilot/actions` handoff action is retired; use
+the audited `/api/v1/copilot/crm` action. Assistance stays disabled by default.

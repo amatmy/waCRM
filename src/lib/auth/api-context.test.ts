@@ -169,3 +169,14 @@ describe('requireApiKey', () => {
     );
   });
 });
+
+it('a copilot:crm marker cannot grant access to legacy contact writes', async () => {
+  findActiveKeyByHash.mockResolvedValue(
+    row({ scopes: ['copilot:crm', 'contacts:write'] })
+  );
+  await expectApiError(
+    requireApiKey(reqWith(`Bearer ${KEY}`), 'contacts:write'),
+    'forbidden',
+    403
+  );
+});

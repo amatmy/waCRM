@@ -15,6 +15,7 @@
 
 export const API_SCOPES = [
   'copilot:act',
+  'copilot:crm',
   'messages:send',
   'messages:read',
   'contacts:read',
@@ -28,7 +29,10 @@ export type ApiScope = (typeof API_SCOPES)[number];
 
 /** Human-readable descriptions, surfaced in the key-creation UI. */
 export const SCOPE_DESCRIPTIONS: Record<ApiScope, string> = {
-  'copilot:act': 'Claim conversations and prepare, dispatch or hand off guarded copilot replies',
+  'copilot:act':
+    'Claim conversations and prepare, dispatch or hand off guarded copilot replies',
+  'copilot:crm':
+    'Controlled copilot assignment, notes, status and deal actions during an active human session',
   'messages:send': 'Send WhatsApp messages',
   'messages:read': 'Read messages and their delivery status',
   'contacts:read': 'List and read contacts',

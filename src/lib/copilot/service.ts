@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from 'pg';
 import { ApiError, badRequest, forbidden } from '@/lib/api/v1/respond';
 import { transaction } from './db';
+import { verifiedAnswer } from './policy';
 import {
   ProviderRejected,
   sendCopilotText,
@@ -38,6 +39,8 @@ export interface Outbox {
   state: string;
   provider_message_id: string | null;
   attempted_at?: Date | string | null;
+  authorization_basis?: string;
+  knowledge_id?: string | null;
 }
 const conflict = (message: string) => new ApiError('bad_request', message, 409);
 const missing = () => new ApiError('not_found', 'Resource not found', 404);
@@ -45,11 +48,11 @@ const missing = () => new ApiError('not_found', 'Resource not found', 404);
 /** Server-only service. Actor identity comes from authenticated routes, never model input. */
 export class CopilotService {
   constructor(
-    private pool: Pool,
+    protected pool: Pool,
     private provider = sendCopilotText
   ) {}
 
-  private async human(c: PoolClient, actor: HumanActor, admin = false) {
+  protected async human(c: PoolClient, actor: HumanActor, admin = false) {
     const { rows } = await c.query(
       `SELECT account_role FROM profiles WHERE user_id=$1 AND account_id=$2
       AND account_role = ANY($3::account_role_enum[]) FOR SHARE`,
@@ -62,7 +65,7 @@ export class CopilotService {
     if (!rows.length)
       throw forbidden('Current account role does not allow this action');
   }
-  private async key(c: PoolClient, actor: KeyActor) {
+  protected async key(c: PoolClient, actor: KeyActor) {
     const binding = await c.query(
       'SELECT operator_id FROM copilot_keys WHERE key_id=$1 AND account_id=$2',
       [actor.keyId, actor.accountId]
@@ -75,7 +78,7 @@ export class CopilotService {
       `SELECT k.id FROM api_keys k JOIN copilot_keys b ON b.key_id=k.id
       WHERE k.id=$1 AND k.account_id=$2 AND b.account_id=$2 AND b.operator_id=$3
       AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at>clock_timestamp())
-      AND 'copilot:act'=ANY(k.scopes) AND k.scopes <@ ARRAY['copilot:act','contacts:read','conversations:read','messages:read']::text[]
+      AND 'copilot:act'=ANY(k.scopes) AND k.scopes <@ ARRAY['copilot:act','copilot:crm','contacts:read','conversations:read','messages:read']::text[]
       FOR SHARE OF k,b`,
       [actor.keyId, actor.accountId, operator]
     );
@@ -83,7 +86,7 @@ export class CopilotService {
       throw forbidden('Copilot key is revoked, expired or missing its scope');
     return operator as string;
   }
-  private async guard(
+  protected async guard(
     c: PoolClient,
     actor: KeyActor,
     input: Pick<ReplyInput, 'conversation_id' | 'session_id'>,
@@ -99,7 +102,7 @@ export class CopilotService {
     if (!session.rows.length)
       throw conflict('Human session paused, expired or replaced');
     const policy = await c.query(
-      "SELECT revision FROM copilot_policies WHERE account_id=$1 AND enabled AND mode='human_approval' FOR SHARE",
+      'SELECT revision,mode FROM copilot_policies WHERE account_id=$1 AND enabled FOR SHARE',
       [actor.accountId]
     );
     if (!policy.rows.length) throw forbidden('Copilot policy is disabled');
@@ -140,17 +143,24 @@ export class CopilotService {
       operator,
       conv: row,
       policyRevision: String(policy.rows[0].revision),
+      mode: policy.rows[0].mode as string,
     };
   }
 
-  async setPolicy(actor: HumanActor, enabled: boolean) {
+  async setPolicy(
+    actor: HumanActor,
+    enabled: boolean,
+    mode?: 'human_approval' | 'hybrid'
+  ) {
+    if (mode !== undefined && !['human_approval', 'hybrid'].includes(mode))
+      throw badRequest('Invalid policy mode');
     return transaction(this.pool, async (c) => {
       await this.human(c, actor, true);
       return (
         await c.query(
-          `INSERT INTO copilot_policies(account_id,enabled) VALUES($1,$2)
-        ON CONFLICT(account_id) DO UPDATE SET enabled=$2, revision=copilot_policies.revision+1 RETURNING *`,
-          [actor.accountId, enabled]
+          `INSERT INTO copilot_policies(account_id,enabled,mode) VALUES($1,$2,coalesce($3,'human_approval'))
+        ON CONFLICT(account_id) DO UPDATE SET enabled=$2,mode=coalesce($3,copilot_policies.mode), revision=copilot_policies.revision+1 RETURNING *`,
+          [actor.accountId, enabled, mode ?? null]
         )
       ).rows[0];
     });
@@ -185,6 +195,7 @@ export class CopilotService {
           (s) =>
             ![
               'copilot:act',
+              'copilot:crm',
               'contacts:read',
               'conversations:read',
               'messages:read',
@@ -192,7 +203,7 @@ export class CopilotService {
         )
       ) {
         throw badRequest(
-          'Bind a dedicated key with copilot:act and read scopes only'
+          'Bind a dedicated key with copilot:act, optional copilot:crm, and read scopes only'
         );
       }
       const result = await c.query(
@@ -267,9 +278,18 @@ export class CopilotService {
         input.ownership_revision,
         input.inbound_id
       );
+      const knowledgeId =
+        gate.mode === 'hybrid'
+          ? await verifiedAnswer(
+              c,
+              actor.accountId,
+              input.inbound_id,
+              input.text
+            )
+          : null;
       const result = await c.query(
         `INSERT INTO copilot_outbox(account_id,key_id,operator_id,conversation_id,session_id,ownership_revision,
-        inbound_id,policy_revision,idempotency_key,reply_text) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        inbound_id,policy_revision,idempotency_key,reply_text,state,authorization_basis,knowledge_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
         ON CONFLICT DO NOTHING RETURNING *`,
         [
           actor.accountId,
@@ -282,6 +302,9 @@ export class CopilotService {
           gate.policyRevision,
           input.idempotency_key,
           input.text,
+          knowledgeId ? 'approved' : 'draft',
+          knowledgeId ? 'verified_answer' : 'human_approval',
+          knowledgeId,
         ]
       );
       if (!result.rows.length)
@@ -349,37 +372,6 @@ export class CopilotService {
       return result.rows[0];
     });
   }
-  async handoff(
-    actor: KeyActor,
-    conversationId: string,
-    revision: string,
-    summary: string
-  ) {
-    return transaction(this.pool, async (c) => {
-      const operator = await this.key(c, actor);
-      const row = (
-        await c.query(
-          'SELECT * FROM conversations WHERE id=$1 AND account_id=$2 FOR UPDATE',
-          [conversationId, actor.accountId]
-        )
-      ).rows[0];
-      if (!row) throw missing();
-      if (
-        row.copilot_key_id !== actor.keyId ||
-        String(row.copilot_revision) !== revision
-      )
-        throw conflict('Conversation ownership changed');
-      return (
-        await c.query(
-          `UPDATE conversations SET copilot_key_id=NULL,copilot_session_id=NULL,copilot_revision=copilot_revision+1,
-        assigned_agent_id=coalesce(assigned_agent_id,$3),ai_autoreply_disabled=true,ai_handoff_summary=$4
-        WHERE id=$1 AND account_id=$2 RETURNING id,copilot_revision,assigned_agent_id,ai_handoff_summary`,
-          [conversationId, actor.accountId, operator, summary.slice(0, 2000)]
-        )
-      ).rows[0];
-    });
-  }
-
   private async accepted(
     c: PoolClient,
     row: Outbox,
@@ -420,6 +412,54 @@ export class CopilotService {
       ]
     );
   }
+  private async eligible(
+    c: PoolClient,
+    actor: KeyActor,
+    row: Outbox,
+    operator: string
+  ) {
+    return c.query(
+      `SELECT m.message_id AS inbound_wamid,w.phone_number_id,w.access_token,ct.phone,ct.wa_user_id
+          FROM messages m JOIN conversations cv ON cv.id=m.conversation_id JOIN contacts ct ON ct.id=cv.contact_id AND ct.account_id=cv.account_id
+          JOIN whatsapp_config w ON w.account_id=cv.account_id
+          JOIN copilot_sessions s ON s.account_id=cv.account_id AND s.operator_id=$4
+          WHERE m.id=$1 AND m.conversation_id=$2 AND cv.account_id=$3 AND m.sender_type='customer'
+          AND m.copilot_verified_inbound AND m.message_id LIKE 'wamid.%' AND w.status='connected'
+          AND m.created_at>clock_timestamp()-interval '24 hours' AND m.created_at<=clock_timestamp()
+          AND s.session_id=$5 AND s.state='active' AND s.expires_at>clock_timestamp()
+          AND EXISTS(SELECT 1 FROM api_keys k WHERE k.id=$6 AND (k.expires_at IS NULL OR k.expires_at>clock_timestamp()))
+          FOR SHARE OF ct,w`,
+      [
+        row.inbound_id,
+        row.conversation_id,
+        actor.accountId,
+        operator,
+        row.session_id,
+        actor.keyId,
+      ]
+    );
+  }
+  private async replyAuthorization(
+    c: PoolClient,
+    actor: KeyActor,
+    row: Outbox,
+    mode: string
+  ) {
+    if (row.authorization_basis !== 'verified_answer') return;
+    if (
+      mode !== 'hybrid' ||
+      !row.knowledge_id ||
+      (await verifiedAnswer(
+        c,
+        actor.accountId,
+        row.inbound_id,
+        row.reply_text
+      )) !== row.knowledge_id
+    )
+      throw conflict(
+        'Verified business answer changed or expired; human review required'
+      );
+  }
   async dispatch(actor: KeyActor, id: string): Promise<Outbox> {
     const row = await this.get(actor, id);
     // A durable pre-dispatch latch survives process/connection failure. No retry path exists.
@@ -433,11 +473,12 @@ export class CopilotService {
       );
       if (gate.policyRevision !== String(row.policy_revision))
         throw conflict('Policy changed');
+      await this.replyAuthorization(c, actor, row, gate.mode);
       return (
         (
           await c.query(
             `UPDATE copilot_outbox SET state='dispatching',attempted_at=clock_timestamp(),updated_at=clock_timestamp()
-        WHERE id=$1 AND state='approved' AND approved_by=$2 RETURNING id`,
+        WHERE id=$1 AND state='approved' AND (approved_by=$2 OR authorization_basis='verified_answer') RETURNING id`,
             [id, gate.operator]
           )
         ).rowCount === 1
@@ -464,26 +505,8 @@ export class CopilotService {
           gate.policyRevision !== String(row.policy_revision)
         )
           throw conflict('Outbox authority changed');
-        const eligible = await c.query(
-          `SELECT m.message_id AS inbound_wamid,w.phone_number_id,w.access_token,ct.phone,ct.wa_user_id
-          FROM messages m JOIN conversations cv ON cv.id=m.conversation_id JOIN contacts ct ON ct.id=cv.contact_id AND ct.account_id=cv.account_id
-          JOIN whatsapp_config w ON w.account_id=cv.account_id
-          JOIN copilot_sessions s ON s.account_id=cv.account_id AND s.operator_id=$4
-          WHERE m.id=$1 AND m.conversation_id=$2 AND cv.account_id=$3 AND m.sender_type='customer'
-          AND m.copilot_verified_inbound AND m.message_id LIKE 'wamid.%' AND w.status='connected'
-          AND m.created_at>clock_timestamp()-interval '24 hours' AND m.created_at<=clock_timestamp()
-          AND s.session_id=$5 AND s.state='active' AND s.expires_at>clock_timestamp()
-          AND EXISTS(SELECT 1 FROM api_keys k WHERE k.id=$6 AND (k.expires_at IS NULL OR k.expires_at>clock_timestamp()))
-          FOR SHARE OF ct,w`,
-          [
-            row.inbound_id,
-            row.conversation_id,
-            actor.accountId,
-            gate.operator,
-            row.session_id,
-            actor.keyId,
-          ]
-        );
+        await this.replyAuthorization(c, actor, current, gate.mode);
+        const eligible = await this.eligible(c, actor, row, gate.operator);
         if (!eligible.rows.length)
           throw conflict(
             'WhatsApp text reply window or session is not eligible'
@@ -493,9 +516,27 @@ export class CopilotService {
         c.on('error', onError);
         const timeout = setTimeout(() => controller.abort(), 10000);
         try {
+          // Contact/config locks may have waited after the first clock check.
+          // Recheck all clocks and eligibility after those locks, before submission.
+          await this.guard(
+            c,
+            actor,
+            current,
+            String(current.ownership_revision),
+            current.inbound_id
+          );
+          const finalEligible = await this.eligible(
+            c,
+            actor,
+            current,
+            gate.operator
+          );
+          if (!finalEligible.rows.length)
+            throw conflict('Final WhatsApp eligibility changed');
+          await this.replyAuthorization(c, actor, current, gate.mode);
           attempted = true;
           const wamid = await this.provider(
-            { ...eligible.rows[0], text: row.reply_text } as ProviderInput,
+            { ...finalEligible.rows[0], text: row.reply_text } as ProviderInput,
             controller.signal
           );
           await this.accepted(c, current, wamid);

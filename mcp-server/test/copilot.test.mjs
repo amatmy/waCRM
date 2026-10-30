@@ -214,6 +214,12 @@ test('guarded copilot writes expose no raw send, approval or activation tool', a
     'get_reply_outcome',
     'send_authorized_reply',
     'handoff_to_human',
+    'assign_conversation',
+    'add_internal_note',
+    'set_conversation_status',
+    'update_linked_deal',
+    'get_crm_context',
+    'get_crm_action_outcome',
   ])
     assert.ok(names.includes(name));
   for (const name of [
@@ -255,17 +261,69 @@ test('guarded copilot writes expose no raw send, approval or activation tool', a
       conversation_id: operator,
       ownership_revision: '1',
       summary: 'Synthetic handoff',
+      session_id: operator,
+      inbound_id: operator,
+      idempotency_key: 'synthetic-handoff',
     },
+  });
+  for (const [name, payload] of [
+    [
+      'assign_conversation',
+      { operator_id: operator, summary: 'Synthetic assignment' },
+    ],
+    ['add_internal_note', { note: 'Synthetic note' }],
+    ['set_conversation_status', { status: 'pending' }],
+    ['update_linked_deal', { deal_id: operator, status: 'won' }],
+  ]) {
+    const result = await client.callTool({
+      name,
+      arguments: {
+        conversation_id: operator,
+        session_id: operator,
+        inbound_id: operator,
+        ownership_revision: '1',
+        idempotency_key: `synthetic-${name}`,
+        ...payload,
+      },
+    });
+    assert.ok(!result.isError, JSON.stringify(result));
+  }
+  await client.callTool({
+    name: 'get_crm_context',
+    arguments: {
+      conversation_id: operator,
+      session_id: operator,
+      ownership_revision: '1',
+    },
+  });
+  await client.callTool({
+    name: 'get_crm_action_outcome',
+    arguments: { action_id: operator },
   });
   assert.deepEqual(
     actions.map((a) => a.body.action),
-    ['claim', 'prepare', 'inspect', 'dispatch', 'handoff']
+    [
+      'claim',
+      'prepare',
+      'inspect',
+      'dispatch',
+      'handoff',
+      'assign',
+      'note',
+      'status',
+      'deal',
+      'context',
+      'outcome',
+    ]
   );
   assert.ok(
     actions.every(
       (a) =>
         a.method === 'POST' &&
-        a.path === '/api/v1/copilot/actions' &&
+        a.path ===
+          (['claim', 'prepare', 'inspect', 'dispatch'].includes(a.body.action)
+            ? '/api/v1/copilot/actions'
+            : '/api/v1/copilot/crm') &&
         !('operator_id' in a.body)
     )
   );
